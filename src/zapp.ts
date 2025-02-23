@@ -11,6 +11,7 @@ import Routes from "./routes"
 import { withAccessLogger } from "@/lib/logger"
 import path from "path"
 import { withZuzRequest } from "@/lib/zrequest"
+import { withZuzAuth } from "./lib/zauth"
 
 de.config()
 withGlobals()
@@ -51,7 +52,15 @@ const handleAPI = (requestMethod: "Post" | "Get", req: Request, resp: Response) 
                 else if( 
                     ACTION &&
                     apiRoutes[METHOD].isObject() && 
-                    ACTION in apiRoutes[METHOD] 
+                    apiRoutes[METHOD].private &&
+                    ACTION in apiRoutes[METHOD].private
+                ){
+                    return withZuzAuth(req, resp, () => apiRoutes[METHOD].private[ACTION](req, resp))
+                }
+                else if( 
+                    ACTION &&
+                    apiRoutes[METHOD].isObject() && 
+                    ACTION in apiRoutes[METHOD]
                 ){
                     return apiRoutes[METHOD][ACTION](req, resp)
                 }

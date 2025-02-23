@@ -1,21 +1,18 @@
 {
   "name": "zapp-backend",
-  "version": "2.1.4",
+  "version": "2.1.5",
   "description": "Backend Manager for Zuz",
   "main": "index.js",
   "scripts": {
     "dev": "concurrently \"tsc -d -w -p tsconfig.json\" \"tsc-alias -w tsconfig.json\" \"nodemon\"",
-    "prepare": "husky",
     "serve": "NODE_ENV=production node dist/index.js",
     "start": "npm-run-all prepare serve",
-    "env": "node env.js",
-    "database": "npx prisma introspect && npx prisma generate",
-    "clean": "husky"
+    "prenv": "node env.js",
+    "database": "npx zorm pull"
   },
   "author": "ZuzPK",
   "license": "ISC",
   "dependencies": {
-    "@prisma/client": "^6.3.1",
     "@types/chokidar": "^2.1.7",
     "@types/cookie-parser": "^1.4.7",
     "@types/cors": "^2.8.17",
@@ -25,6 +22,7 @@
     "@types/md5": "^2.3.5",
     "@types/node": "^22.9.1",
     "@types/nodemailer": "^6.4.17",
+    "@zuzjs/orm": "^0.1.4",
     "body-parser": "^1.20.3",
     "chokidar": "^3.6.0",
     "concurrently": "^9.1.0",
@@ -36,18 +34,17 @@
     "jsonwebtoken": "^9.0.2",
     "md5": "^2.3.0",
     "multer": "1.4.5-lts.1",
-    "mysql2": "^3.11.3",
     "nanoid": "^5.0.7",
     "nodemailer": "^6.9.16",
     "nodemon": "^3.1.6",
     "npm-run-all": "^4.1.5",
+    "reflect-metadata": "^0.2.2",
     "uuid": "^10.0.0",
     "winston": "^3.17.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
     "husky": "^9.1.7",
-    "prisma": "^6.3.1",
     "ts-node": "^10.9.2",
     "tsc-alias": "^1.8.10",
     "typescript": "^5.6.3"

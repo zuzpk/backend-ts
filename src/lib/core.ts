@@ -5,6 +5,7 @@ import { Request } from "express"
 import { dynamicObject } from "./types";
 import nodemailer from 'nodemailer'
 import { Logger } from "./logger";
+import { SESS_DURATION } from "@/config";
 
 de.config()
 const encryptionAlgo = 'aes-256-cbc';
@@ -13,10 +14,20 @@ const hashids = new Hashids(process.env.ENCRYPTION_KEY, +process.env.HASHIDS_LEN
 export const toHash = ( str : number ) : string => hashids.encode(str)
 
 export const fromHash = ( str : string ) : number => {
-    const n = hashids.decode(str)
-    return n.length >= 0 ? Number(n[0]) : 0
+    try{
+        const n = hashids.decode(str)
+        return n.length >= 0 ? Number(n[0]) : 0
+    }
+    catch(e){
+        return 0
+    }
 }
 
+export const withSeperator = (str: string|number, ...more: (string|number)[]) : string => [str, ...more].join(process.env.SEPERATOR)
+
+export const withoutSeperator = (str: string) : string[] => str.split(process.env.SEPERATOR!)
+
+export const lang = (str: string, values: (string|number)[]) => str.replace(/%(\d+)/g, (_, index) => values[Number(index)].toString() || `%${index}`)
 
 const safeB64Encode = (str: string): string => {
     return str.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -96,6 +107,10 @@ export const withGlobals = () => {
     }
     String.prototype.ucfirst = function(){
         return `${this.charAt(0).toUpperCase()}${this.substring(1, this.length)}`
+    }
+    String.prototype.formatString = function(v: string|number, ...vv: (string|number)[]){
+        var values = [ v, ...vv ]
+        return this.replace(/%(\d+)/g, (_, index) => values[Number(index)].toString() || `%${index}`)
     }
 }
 

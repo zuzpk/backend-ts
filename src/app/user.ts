@@ -1,140 +1,522 @@
-// import { Request, Response } from "express"
-// import { dynamicObject } from "@/lib/types"
-// import { fromHash, headers } from "@/lib/core"
-// import { APP_NAME, SESS_KEYS, SESS_PREFIX } from "@/config"
-// import DB from "@/lib/prisma"
+import { Decode, Encode, fromHash, headers, lang, numberInRange, sendMail, toHash, withoutSeperator, withSeperator } from "@/lib/core"
+import { Logger } from "@/lib/logger"
+import zorm from "@/lib/zorm"
+import { Users } from "@/zorm/users"
+import { Request, Response } from "express"
+import de from "dotenv"
+import { ADMIN_EMAIL, APP_NAME, APP_URL, SESS_COOKIE_SETTING, SESS_COOKIE_SETTING_HTTP, SESS_DURATION, SESS_KEYS, SESS_PREFIX } from "@/config"
+import jwt from "jsonwebtoken";
+import { Cog } from "."
+import { dynamicObject } from "@zuzjs/orm"
+import { User, UserStatus, UserType } from "@/lib/types"
+import { UsersSess } from "@/zorm/users_sess"
 
-import prisma from "@/lib/prisma"
+de.config()
 
-export const UserTemp = () => {
-    console.log(prisma)
+export const uname = (u: Users) : string => u.fullname == `none` ? u.fullname.split(process.env.SEPERATOR!)[0] : u.fullname || `Guest`
+
+export const youser = async ( u: Users, cc?: string ) : Promise<User> => {
+    
+    const [ country, stamp ] = withoutSeperator(u.signin)
+
+    return {
+        ID: toHash(u.ID),
+        utp: u.utype as UserType,
+        name: uname(u),
+        email: u.email.trim(),
+        cc: cc || country,
+        status: u.status as UserStatus
+    }
+
 }
 
-// export enum UserType {
-//     Guest = 0,
-//     User = 1,
-//     Admin = 9
-// }
+export const Signin = async (req: Request, resp: Response) => {
 
-// export type User = {
-//     ID: string | number,
-//     utp: UserType,
-//     name: string,
-//     email: string,
-//     status: string
-// }
-
-// export const uname = (u: dynamicObject) : string => u.name == `none` ? u.name.split(`@`)[0] : u.name || `Guest`
-
-// export const youser = async ( u: dynamicObject ) : Promise<User> => {
+    const { userAgent, cfIpcountry : country } = headers(req)
     
-//     return {
-//         ID: 1,
-//         utp: u.type == `admin` ? UserType.Admin : UserType.User,
-//         name: uname(u),
-//         email: u.email.trim(),
-//         status: u.status
-//     }
+    const { em, psw } = req.body
 
-// }
+    if ( !em || em.isEmpty() || !psw || psw.isEmpty() ){
+        return resp.send({
+            error: `invalidData`,
+            message: req.lang!.emailPassRequired
+        })
+    }
 
-// export const withSession = async (req: Request, resp: Response, raw = true): Promise<dynamicObject> => {
+    if ( !em.isEmail() ){
+        return resp.send({
+            error: `invalidData`,
+            message: req.lang!.invalidEmail
+        })
+    }
 
-//     return new Promise((resolve, reject) => {
+    const user = await zorm.find(Users).where({ email: em.trim().toLowerCase() })
+    if ( !user.hasRows ){
+        return resp.send({
+            error: `invalidEmail`,
+            message: req.lang!.unknownEmail
+        })
+    }
 
-//         const { userAgent, cfIpcountry } = headers(req);
-//         const country = cfIpcountry || `unknown`
-//         const payload = req.body
+    const u = user.row!
 
-//         try {
+    if ( u.password != Encode(psw) ){   
+        return resp.send({
+            error : 'invalidPassword',
+            message : req.lang!.wrongPassword
+        })
+    }
+    
+    if ( u.status == -1 ){
+        return resp.send({
+            error: `accountBanned`,
+            message: req.lang!.youAreBanned.formatString( APP_NAME )
+        })
+    }
+    
+    const geo = withSeperator( country, Date.now() )
 
-//             const _auth : string[] = []
-//             for ( const c in payload ){
-//                 if ( SESS_KEYS.includes( c.replace(SESS_PREFIX, ``)) ){
-//                     _auth.push(c)
-//                 }
-//             }
+    return zorm.update(Users)
+        .with({ signin: geo })
+        .where({ ID: u.ID })
+        .then(async (result) => {
+            const { ID, email, password } = result.record as Users
+            const session = await zorm.create(UsersSess).with({
+                uid: String(ID),
+                token: Encode(withSeperator(ID, email, password, Date.now())),
+                expiry: String(Date.now() + SESS_COOKIE_SETTING.maxAge!),
+                uinfo: geo
+            })
+            const _you = await youser(result.record as Users, country)
+            resp.cookie(SESS_KEYS.ID, toHash(result.record!.ID), SESS_COOKIE_SETTING)
+            resp.cookie(SESS_PREFIX + SESS_KEYS.ID, toHash(result.record!.ID), SESS_COOKIE_SETTING_HTTP)
+            resp.cookie(SESS_PREFIX + SESS_KEYS.Data, _you, SESS_COOKIE_SETTING_HTTP)
+            resp.cookie(SESS_PREFIX + SESS_KEYS.Fingerprint, toHash(result.record!.ID), SESS_COOKIE_SETTING_HTTP)
+            resp.cookie(SESS_PREFIX + SESS_KEYS.Session, toHash(session.id!), SESS_COOKIE_SETTING_HTTP)
+            resp.cookie(SESS_PREFIX + SESS_KEYS.Token, jwt.sign(
+                {
+                    em: result.record!.email.trim(),
+                    cc: country,
+                    ts: Date.now()
+                }, 
+                process.env.ENCRYPTION_KEY!,
+                {
+                    audience: APP_NAME.replace(/\s+/g, `-`).toLowerCase(),
+                    issuer: APP_NAME,
+                    expiresIn: Date.now() + SESS_DURATION
+                }
+            ), SESS_COOKIE_SETTING_HTTP)
 
-//             if ( _auth.length != SESS_KEYS.length ){
-//                 return reject({
-//                     error: `oauth`,
-//                     message: req.lang!.unauthorized
-//                 })
-//             }
+            return resp.send({
+                kind: `oauth`,
+                u: _you
+            })
 
-//             const _uid = payload[`${SESS_PREFIX}ui`]
-//             const _sid = payload[`${SESS_PREFIX}si`]
+        })
+        .catch((err) => {
+            Logger.error(`[signinErrored]`, err)
+            return resp.send({
+                error: `oauth`,
+                message: req.lang!.signinFailed
+            })
+        })
 
-//             const uid = fromHash(_uid)
-//             const sid = fromHash(_sid)
+}
 
-//             if ( !_uid || !_sid || !uid || !sid ){
-//                 return reject({
-//                     error: `oauth`,
-//                     message: req.lang!.unauthorized
-//                 })
-//             }
+export const Signup = async (req: Request, resp: Response) => {
 
-//             Promise.all([
-//                 DB.SELECT("SELECT uid FROM users_sess WHERE ID=? AND expiry>? AND status=?", [sid, Date.now(), 1]),
-//                 DB.SELECT("SELECT * FROM users WHERE ID=?", [uid]),            
-//             ])
-//             .then(([sess, user]) => {
+    const { userAgent, cfIpcountry : country } = headers(req)
+    const { nm, em, psw, rpsw } = req.body
 
-//                 const u = user.row!
+    if ( !em || em.isEmpty() || !psw || psw.isEmpty() ){
+        return resp.send({
+            error: `invalidData`,
+            message: req.lang!.emailPassRequired
+        })
+    }
 
-//                 if ( uid != sess.row!.uid ){
-//                     return reject({
-//                         error: `oauth`,
-//                         message: `Your session is expired. Sign in again.`
-//                     })
-//                 }
+    if ( !em.isEmail() ){
+        return resp.send({
+            error: `invalidData`,
+            message: req.lang!.invalidEmail
+        })
+    }
 
-//                 if ( u.status == -1 ){
-//                     return reject({
-//                         error: `oauth`,
-//                         message: `You are banned from ${APP_NAME}.`
-//                     })
-//                 }
+    const [ name, tld ] = em.toLowerCase().trim().split(`@`)
 
-//                 // Update(u.ID, {
-//                 //     signin: `${country}@@${Date.now()}`
-//                 // })
-//                 // .then(async x => {
-//                 //     if ( raw )
-//                 //         resolve(u)
-//                 //     else
-//                 //         resolve({
-//                 //             kind: `oauth`,
-//                 //             u: await youser(u)
-//                 //         })
-//                 // })
-//                 // .catch(err => {
-//                 //     console.log(`[withUserSessError2]`, err)
-//                 //     reject({
-//                 //         error: `oauth`,
-//                 //         message: `your session token is invalid. signin again.`
-//                 //     })
-//                 // })
+    const checkTLD = await fetch(`https://${tld}`)
 
-//             })
-//             .catch(err => {
-//                 console.log(`[withUserSessError]`, err)
-//                 reject({
-//                     error: `oauth`,
-//                     message: `Session token is invalid.`
-//                 })
-//             })
+    if ( checkTLD.status != 200 ){
+        return resp.send({
+            error: `invalidData`,
+            message: req.lang!.invalidEmailDomain
+        })
+    }
 
-//         }
-//         catch(e){
-//             reject({
-//                 error: `serverBusy`,
-//                 message: req.lang!.serverBusy
-//             })
-//         }
+    const email = `${name}@${tld}`.toLowerCase().trim()
+
+    const check = await zorm.find(Users).where({ email })
+    if ( check.hasRows ){
+        return resp.send({
+            error : 'EmailAlreadyTaken',
+            message : req.lang!.emailExists
+        })
+    }
+    
+    //New
+    const geo = withSeperator( country, Date.now() )
+    const ucode = numberInRange(111111, 999999)
+    const token = toHash(ucode);
+    const password = Encode(psw)
+
+    let reff = 0
+    if ( `__urf` in req.body ){
+        reff = fromHash(req.body.__urf) || 0
+    }
+
+    const user = await zorm
+        .create(Users)
+        .with({
+            token, 
+            ucode: String(ucode),
+            email: em,
+            password,
+            fullname: withSeperator((nm || name).trim().split(/\s+/g)),
+            reff,
+            joined: geo,
+            signin: geo
+        })
+
+    if ( user.created ){
+
+        const otpToken = Encode(withSeperator(`signup`, user.id!, ucode, Date.now()))
+        const verifyToken = Encode(withSeperator(`signup`, user.id!, token, Date.now()))
+
+        return sendMail(
+            `${APP_NAME} <${ADMIN_EMAIL}>`, 
+            email, 
+            req.lang!.emailSignupSubject.formatString(ucode),
+            req.lang!.emailSignupMessage.formatString(APP_NAME, ucode, `${APP_URL}u/verify/${verifyToken}`, em)
+        )
+        .then(async r => {
+
+            let _resp : dynamicObject = {
+                kind: `accountCreated`,
+                token: otpToken,
+                email,
+                message: req.lang!.accountCreated
+            }
+            const oauth = await Cog(`oauth_after_signup`, 1)
+            if ( oauth ){
+                const { ID, email, password } = user.record!
+                const session = await zorm.create(UsersSess).with({
+                    uid: ID,
+                    token: Encode(withSeperator(ID, email, password, Date.now())),
+                    expiry: String(Date.now() + SESS_COOKIE_SETTING.maxAge!),
+                    uinfo: geo
+                })
+                const _you = await youser(user!.record as Users, country)
+                _resp.u = _you
+                resp.cookie(SESS_KEYS.ID, toHash(user.record!.ID), SESS_COOKIE_SETTING)
+                resp.cookie(SESS_PREFIX + SESS_KEYS.ID, toHash(user.record!.ID), SESS_COOKIE_SETTING_HTTP)
+                resp.cookie(SESS_PREFIX + SESS_KEYS.Data, _you, SESS_COOKIE_SETTING_HTTP)
+                resp.cookie(SESS_PREFIX + SESS_KEYS.Fingerprint, toHash(user.record!.ID), SESS_COOKIE_SETTING_HTTP)
+                resp.cookie(SESS_PREFIX + SESS_KEYS.Session, toHash(session.id!), SESS_COOKIE_SETTING_HTTP)
+                resp.cookie(SESS_PREFIX + SESS_KEYS.Token, jwt.sign(
+                    {
+                        em: user.record!.email.trim(),
+                        cc: country,
+                        ts: Date.now()
+                    }, 
+                    process.env.ENCRYPTION_KEY!,
+                    {
+                        audience: APP_NAME.replace(/\s+/g, `-`).toLowerCase(),
+                        issuer: APP_NAME,
+                        expiresIn: Date.now() + SESS_DURATION
+                    }
+                ), SESS_COOKIE_SETTING_HTTP)
+            }
+            return resp.send(_resp)
+        })
+        .catch(err => {
+            Logger.error(`[signupError]`, err)
+            return resp.send({
+                error: `accountNotCreated`,
+                message: req.lang!.accountNotCreated
+            })
+        })
+
+    }
+
+    Logger.error(`[signupErrored]`, user.error?.message)
+    return resp.send({
+        error: `accountNotCreated`,
+        message: user.error?.message || req.lang!.accountNotCreated
+    })
+
+}
+
+export const Recover = async (req: Request, resp: Response) => {
+
+    const { userAgent, cfIpcountry : country } = headers(req)
+    
+    const { em } = req.body
+
+    if ( !em || em.isEmpty() || !em.isEmail() ){
+        return resp.send({
+            error: `invalidData`,
+            message: req.lang!.invalidEmail
+        })
+    }
+
+    const user = await zorm.find(Users).where({ email: em.toLowerCase().trim() })
+
+    if ( !user.hasRows ){
+        return resp.send({
+            error: `invalidEmail`,
+            message: req.lang!.unknownEmail
+        })
+    }
+
+    const u = user.row!
+
+    if ( u.status == -1 ){
+        return resp.send({
+            error: `accountBanned`,
+            message: req.lang!.youAreBanned.formatString( APP_NAME )
+        })
+    }
+
+    const ucode = numberInRange(111111, 999999)
+    const token = toHash(ucode);
+
+    const you = await zorm.update(Users)
+        .with({ token, ucode: String(ucode) })
+        .where({ ID: u.ID })
+
+    if ( !you.updated ){
+        return resp.send({
+            error: `oauth`,
+            message: req.lang!.recoveryFailed
+        })
+    }
 
 
-//     })
+    const otpToken = Encode(withSeperator(`recover`, u.ID, ucode, Date.now()))
+    const verifyToken = Encode(withSeperator(`recover`, u.ID, token, Date.now()))
 
-// }
+    return sendMail(
+        `${APP_NAME} <${ADMIN_EMAIL}>`, 
+        u.email, 
+        req.lang!.emailRecoverSubject.formatString(ucode),
+        req.lang!.emailRecoverMessage.formatString(APP_NAME, ucode, `${APP_URL}u/verify/${verifyToken}`, u.email)
+    )
+    .then(async r => {
+        return resp.send({
+            kind: `verificationCodeSent`,
+            token: otpToken,
+            email: u.email,
+            message: req.lang!.recoveryEmailSent
+        })
+    })
+    .catch(err => {
+        Logger.error(`[signupError]`, err)
+        return resp.send({
+            error: `recoveryNotSent`,
+            message: req.lang!.recoverEmailFailed
+        })
+    })
+}
+
+export const RecoverUpdate = async (req: Request, resp: Response) => {
+    
+    const { token, repassw } = req.body
+    const [ mode, uid, ucode, utoken ] = withoutSeperator( Decode( token ) )
+
+    const user = await zorm.find(Users).where({ ID: uid, token: utoken, ucode })
+
+    if ( !user.hasRows ){
+        return resp.send({
+            error: `recoveryFailed`,
+            message: req.lang!.securityTokenInvalid
+        })
+    }
+
+    const code = numberInRange(111111, 999999)
+    const voken = toHash(code);
+
+    const you = await zorm.update(Users)
+        .with({
+            token: voken,
+            ucode: String(code),
+            password: Encode(repassw)
+        })
+        .where({ ID: uid })
+
+    if ( you.updated ){
+        return resp.send({
+            kind: `recoverySuccess`,
+            name: user.row!.fullname,
+            message: req.lang!.passwordUpdated
+        })
+    }
+
+    return resp.send({
+        error: `recoveryFailed`,
+        message: req.lang!.passwordNotUpdated
+    })
+
+}
+
+export const Verify = async (req: Request, resp: Response) => {
+
+    const { token, otp } = req.body
+
+    if( !token || token.isEmpty() ){
+        return resp.send({
+            error: `invalidData`,
+            message: req.lang!.verifyTokenRequired
+        })
+    }
+    
+    const [ mode, uid, ucode, expiry ] = withoutSeperator( Decode( token ) )
+
+    if ( otp ){
+
+        if ( ucode != otp ){
+            return resp.send({
+                error: `verificationFailed`,
+                message: req.lang!.verifyTokenInvalid
+            })
+        }
+
+    }
+
+    const user = await zorm.find(Users).where({ ID: Number(uid), ucode, status: `!-1` })
+
+    if ( user.hasRows ){
+        
+        const u = user.row!
+
+        if ( mode.equals(`signup`) && u.status == 1 ){
+            return resp.send({
+                error: `verificationFailed`,
+                code: 101,
+                message: req.lang!.alreadyVerified,
+            })
+        }
+
+        const ucode = numberInRange(111111, 999999)
+        const token = toHash(ucode);
+              
+        return zorm.update(Users)
+            .with({
+                token, ucode: String(ucode), status: u.status == 0 ? 1 : u.status
+            })
+            .where({
+                ID: uid
+            })
+            .then(save => {
+                return resp.send({
+                    kind: `verificationSuccess`,
+                    name: withoutSeperator( u.fullname )[0],
+                    token: mode.equals(`recover`) ? Encode( withSeperator( `update`, u.ID, ucode, token, Date.now() ) ) : `-`,
+                    message: req.lang!.verifySuccess
+                })
+            })
+            .catch(err => {
+                Logger.error(`[verifyError]`, err)
+                return resp.send({
+                    error: `verificationFailed`,
+                    code: 102,
+                    message: req.lang!.verifyFailed
+                })
+            })
+    }
+
+    Logger.error(`[verifyTokenError]`)
+    return resp.send({
+        error: `verificationFailed`,
+        code: 102,
+        message: req.lang!.verifyTokenInvalid
+    })
+
+    // return (otp ? 
+    //         DB.SELECT("SELECT ID, fullname, status FROM users WHERE ID=? AND ucode=? AND status!=?", [uid, ucode, -1])
+    //         : DB.SELECT("SELECT ID, fullname, status FROM users WHERE ID=? AND token=? AND status!=?", [uid, ucode, -1])
+    //     )
+    //     .then(user => {
+            
+    //             const u = user.row!
+
+    //             if ( mode.equals(`signup`) && u.status == 1 ){
+    //                 return resp.send({
+    //                     error: `verificationFailed`,
+    //                     code: 101,
+    //                     message: `You have already verified your account.`
+    //                 })
+    //             }
+
+    //             const ucode = numberInRange(111111, 999999)
+    //             const token = toHash(ucode);
+                
+    //             return DB.UPDATE(`UPDATE users SET token=?, ucode=?, status=? WHERE ID=?`, 
+    //                 [token, ucode, u.status == 0 ? 1 : u.status, uid])
+    //             .then(save => {
+    //                 return resp.send({
+    //                     kind: `verificationSuccess`,
+    //                     name: u.fullname,
+    //                     token: mode.equals(`recover`) ? Encode(`update@@${u.ID}@@${ucode}@@${token}@@${Date.now()}`) : `-`,
+    //                     message: `Your account has been verified.`
+    //                 })
+    //             })
+    //             .catch(err => {
+    //                 Logger.error(`[verifyError]`, err)
+    //                 return resp.send({
+    //                     error: `verificationFailed`,
+    //                     code: 102,
+    //                     message: `Verification was not successful. please try again.`
+    //                 })
+    //             })
+            
+    //     })
+    //     .catch(err => {
+    //         Logger.error(`[verifyTokenError]`, err)
+    //         return resp.send({
+    //             error: `verificationFailed`,
+    //             code: 102,
+    //             message: `Verification code is either invalid or expired. please try again.`
+    //         })
+    //     })
+
+}
+
+export const Signout = async (req: Request, resp: Response) => {
+
+    const session = await zorm.delete(UsersSess).where({ ID: req.sessionID! })
+
+    if ( session.deleted ){
+
+        const _n = { ...SESS_COOKIE_SETTING }
+        const _v = { ...SESS_COOKIE_SETTING_HTTP }
+        delete _n.maxAge
+        delete _v.maxAge
+
+        resp.clearCookie(SESS_KEYS.ID, _n)
+        Object.keys(SESS_KEYS).forEach((k) => {
+            resp.clearCookie(SESS_PREFIX + SESS_KEYS[k], _v)
+        })
+
+        return resp.send({
+            kind: `signoutSuccess`,
+            message: req.lang!.signoutSuccess
+        })
+
+    }
+
+    return resp.send({
+        error: `signoutFailed`,
+        message: req.lang!.signoutFailed
+    })
+
+}

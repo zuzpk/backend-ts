@@ -1,13 +1,11 @@
 import { Request, Response, NextFunction } from "express"
 import path from "path"
 import fs from "fs"
-import { DEFAULT_LANG } from "../config";
-
-declare module "express" {
-    interface Request {
-      lang?: Record<string, string>;
-    }
-}
+import { DEFAULT_LANG, SESS_KEYS, SESS_PREFIX } from "../config";
+import { fromHash, headers } from "./core";
+import { User } from "./types";
+import { UsersSess } from "@/zorm/users_sess";
+import zorm from "./zorm";
 
 // Load all language files once at startup
 const LANGS_DIR = path.join(__dirname, "..", "app", "langs");
@@ -21,14 +19,11 @@ fs.readdirSync(LANGS_DIR).forEach((file) => {
   }
 });
 
-export const withZuzRequest = (req: Request, res: Response, next: NextFunction) => {
+export const withZuzRequest = async (req: Request, res: Response, next: NextFunction) => {
 
-    const langCode = req.signedCookies.lng || DEFAULT_LANG;
-    req.lang = languages[langCode] || languages[DEFAULT_LANG];
+  const langCode = req.signedCookies.lang || DEFAULT_LANG;
+  req.lang = languages[langCode] || languages[DEFAULT_LANG];
 
-    
-
-
-    next()
+  next()
         
 }
