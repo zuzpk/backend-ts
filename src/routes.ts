@@ -18,7 +18,7 @@ const Routes : dynamicObject = {
             private: {
                 Signout
             },
-            Join: Signup, Signin,
+            Signup, Signin,
             Recover, RecoverUpdate, Verify
         }
     }

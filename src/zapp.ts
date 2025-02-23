@@ -17,7 +17,7 @@ de.config()
 withGlobals()
 
 const app = express();
-
+app.disable(`x-powered-by`);
 app.use(
     cors(), 
     cookieParser(process.env.ENCRYPTION_KEY), 
