@@ -1,7 +1,7 @@
 import { exec } from 'child_process';
 import path from 'path';
+import "reflect-metadata";
 import ProcessManager from './pm';
-import "reflect-metadata"
 
 const appName = 'zapp';
 const script = path.join(__dirname, '../dist/zapp.js');

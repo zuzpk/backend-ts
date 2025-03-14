@@ -1,15 +1,15 @@
-import { Decode, Encode, fromHash, headers, lang, numberInRange, sendMail, toHash, withoutSeperator, withSeperator } from "@/lib/core"
+import { ADMIN_EMAIL, APP_NAME, APP_URL, SESS_COOKIE_SETTING, SESS_COOKIE_SETTING_HTTP, SESS_DURATION, SESS_KEYS, SESS_PREFIX } from "@/config"
+import { _, Decode, Encode, fromHash, headers, numberInRange, sendMail, toHash, withoutSeperator, withSeperator } from "@/lib/core"
 import { Logger } from "@/lib/logger"
+import { User, UserStatus, UserType } from "@/lib/types"
 import zorm from "@/lib/zorm"
 import { Users } from "@/zorm/users"
-import { Request, Response } from "express"
-import de from "dotenv"
-import { ADMIN_EMAIL, APP_NAME, APP_URL, SESS_COOKIE_SETTING, SESS_COOKIE_SETTING_HTTP, SESS_DURATION, SESS_KEYS, SESS_PREFIX } from "@/config"
-import jwt from "jsonwebtoken";
-import { Cog } from "."
-import { dynamicObject } from "@zuzjs/orm"
-import { User, UserStatus, UserType } from "@/lib/types"
 import { UsersSess } from "@/zorm/users_sess"
+import { dynamicObject } from "@zuzjs/orm"
+import de from "dotenv"
+import { Request, Response } from "express"
+import jwt from "jsonwebtoken"
+import { Cog } from "."
 
 de.config()
 
@@ -36,14 +36,14 @@ export const Signin = async (req: Request, resp: Response) => {
     
     const { em, psw } = req.body
 
-    if ( !em || em.isEmpty() || !psw || psw.isEmpty() ){
+    if ( !em || _(em).isEmpty() || !psw || _(psw).isEmpty() ){
         return resp.send({
             error: `invalidData`,
             message: req.lang!.emailPassRequired
         })
     }
 
-    if ( !em.isEmail() ){
+    if ( !_(em).isEmail() ){
         return resp.send({
             error: `invalidData`,
             message: req.lang!.invalidEmail
@@ -70,7 +70,7 @@ export const Signin = async (req: Request, resp: Response) => {
     if ( u.status == -1 ){
         return resp.send({
             error: `accountBanned`,
-            message: req.lang!.youAreBanned.formatString( APP_NAME )
+            message: _(req.lang!.youAreBanned).formatString( APP_NAME )
         })
     }
     
@@ -128,14 +128,14 @@ export const Signup = async (req: Request, resp: Response) => {
     const { userAgent, cfIpcountry : country } = headers(req)
     const { nm, em, psw, rpsw } = req.body
 
-    if ( !em || em.isEmpty() || !psw || psw.isEmpty() ){
+    if ( !em || _(em).isEmpty() || !psw || _(psw).isEmpty() ){
         return resp.send({
             error: `invalidData`,
             message: req.lang!.emailPassRequired
         })
     }
 
-    if ( !em.isEmail() ){
+    if ( !_(em).isEmail() ){
         return resp.send({
             error: `invalidData`,
             message: req.lang!.invalidEmail
@@ -195,8 +195,8 @@ export const Signup = async (req: Request, resp: Response) => {
         return sendMail(
             `${APP_NAME} <${ADMIN_EMAIL}>`, 
             email, 
-            req.lang!.emailSignupSubject.formatString(ucode),
-            req.lang!.emailSignupMessage.formatString(APP_NAME, ucode, `${APP_URL}u/verify/${verifyToken}`, em)
+            _(req.lang!.emailSignupSubject).formatString(ucode)._,
+            _(req.lang!.emailSignupMessage).formatString(APP_NAME, ucode, `${APP_URL}u/verify/${verifyToken}`, em)._
         )
         .then(async r => {
 
@@ -262,7 +262,7 @@ export const Recover = async (req: Request, resp: Response) => {
     
     const { em } = req.body
 
-    if ( !em || em.isEmpty() || !em.isEmail() ){
+    if ( !em || _(em).isEmpty() || !_(em).isEmail() ){
         return resp.send({
             error: `invalidData`,
             message: req.lang!.invalidEmail
@@ -283,7 +283,7 @@ export const Recover = async (req: Request, resp: Response) => {
     if ( u.status == -1 ){
         return resp.send({
             error: `accountBanned`,
-            message: req.lang!.youAreBanned.formatString( APP_NAME )
+            message: _(req.lang!.youAreBanned).formatString( APP_NAME )
         })
     }
 
@@ -308,8 +308,8 @@ export const Recover = async (req: Request, resp: Response) => {
     return sendMail(
         `${APP_NAME} <${ADMIN_EMAIL}>`, 
         u.email, 
-        req.lang!.emailRecoverSubject.formatString(ucode),
-        req.lang!.emailRecoverMessage.formatString(APP_NAME, ucode, `${APP_URL}u/verify/${verifyToken}`, u.email)
+        _(req.lang!.emailRecoverSubject).formatString(ucode)._,
+        _(req.lang!.emailRecoverMessage).formatString(APP_NAME, ucode, `${APP_URL}u/verify/${verifyToken}`, u.email)._
     )
     .then(async r => {
         return resp.send({
@@ -398,7 +398,7 @@ export const Verify = async (req: Request, resp: Response) => {
         
         const u = user.row!
 
-        if ( mode.equals(`signup`) && u.status == 1 ){
+        if ( _(mode).equals(`signup`) && u.status == 1 ){
             return resp.send({
                 error: `verificationFailed`,
                 code: 101,
@@ -420,7 +420,7 @@ export const Verify = async (req: Request, resp: Response) => {
                 return resp.send({
                     kind: `verificationSuccess`,
                     name: withoutSeperator( u.fullname )[0],
-                    token: mode.equals(`recover`) ? Encode( withSeperator( `update`, u.ID, ucode, token, Date.now() ) ) : `-`,
+                    token: _(mode).equals(`recover`) ? Encode( withSeperator( `update`, u.ID, ucode, token, Date.now() ) ) : `-`,
                     message: req.lang!.verifySuccess
                 })
             })
@@ -441,54 +441,21 @@ export const Verify = async (req: Request, resp: Response) => {
         message: req.lang!.verifyTokenInvalid
     })
 
-    // return (otp ? 
-    //         DB.SELECT("SELECT ID, fullname, status FROM users WHERE ID=? AND ucode=? AND status!=?", [uid, ucode, -1])
-    //         : DB.SELECT("SELECT ID, fullname, status FROM users WHERE ID=? AND token=? AND status!=?", [uid, ucode, -1])
-    //     )
-    //     .then(user => {
-            
-    //             const u = user.row!
+}
 
-    //             if ( mode.equals(`signup`) && u.status == 1 ){
-    //                 return resp.send({
-    //                     error: `verificationFailed`,
-    //                     code: 101,
-    //                     message: `You have already verified your account.`
-    //                 })
-    //             }
+export const removeAuthCookies = (resp: Response) : Response => {
 
-    //             const ucode = numberInRange(111111, 999999)
-    //             const token = toHash(ucode);
-                
-    //             return DB.UPDATE(`UPDATE users SET token=?, ucode=?, status=? WHERE ID=?`, 
-    //                 [token, ucode, u.status == 0 ? 1 : u.status, uid])
-    //             .then(save => {
-    //                 return resp.send({
-    //                     kind: `verificationSuccess`,
-    //                     name: u.fullname,
-    //                     token: mode.equals(`recover`) ? Encode(`update@@${u.ID}@@${ucode}@@${token}@@${Date.now()}`) : `-`,
-    //                     message: `Your account has been verified.`
-    //                 })
-    //             })
-    //             .catch(err => {
-    //                 Logger.error(`[verifyError]`, err)
-    //                 return resp.send({
-    //                     error: `verificationFailed`,
-    //                     code: 102,
-    //                     message: `Verification was not successful. please try again.`
-    //                 })
-    //             })
-            
-    //     })
-    //     .catch(err => {
-    //         Logger.error(`[verifyTokenError]`, err)
-    //         return resp.send({
-    //             error: `verificationFailed`,
-    //             code: 102,
-    //             message: `Verification code is either invalid or expired. please try again.`
-    //         })
-    //     })
+    const _n = { ...SESS_COOKIE_SETTING }
+    const _v = { ...SESS_COOKIE_SETTING_HTTP }
+    delete _n.maxAge
+    delete _v.maxAge
 
+    resp.clearCookie(SESS_KEYS.ID, _n)
+    Object.keys(SESS_KEYS).forEach((k) => {
+        resp.clearCookie(SESS_PREFIX + SESS_KEYS[k], _v)
+    })
+
+    return resp
 }
 
 export const Signout = async (req: Request, resp: Response) => {

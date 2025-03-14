@@ -1,5 +1,7 @@
+import { _, withoutSeperator } from "@/lib/core"
 import zorm from "@/lib/zorm"
 import { Settings } from "@/zorm/settings"
+import { dynamicObject } from "@zuzjs/orm"
 import de from "dotenv"
 import multer from "multer"
 import path from "path"
@@ -17,12 +19,37 @@ const storage = multer.diskStorage({
     }
 })
 
-export const Cog = async (okey: string, defaultValue?: boolean | string | number | {}) => {
-    const get = await zorm.find(Settings).select([`value`]).where({ okey })
-    if ( get.hasRows ){
-        return [`1`, `0`].includes(get.row.value) ? (get.row.value == `1`) : get.row.value
+export const Cog = async (okey: string | string[], defaultValue?: boolean | string | string[] | number | {}) => {
+    let query = zorm.find(Settings)
+    if ( _(Cog).isArray() ){
+        (okey as string[]).forEach((ok, i) => {
+            console.log(`-`, ok)
+            if ( i == 0 )
+                query.where({ okey: ok })
+            else
+                query.or({ okey: ok })
+        })
     }
-    else if ( defaultValue ){
+    else query.where({ okey })
+
+    const _value = (val : string) => {
+        return [`1`, `0`].includes(val) ? 
+            (val == `1`) 
+                : val.includes(process.env.SEPERATOR!) ? withoutSeperator(val) : val
+    }
+
+    const get = await query
+    if ( get.hasRows ){
+        if ( get.rows && get.rows.length > 0 ){
+            const vals : dynamicObject = {}
+            get.rows.forEach((r) => {
+                vals[r.okey] = _value(r.value)
+            })
+            return vals
+        }
+        else return _value(get.row.value)
+    }
+    else if ( typeof okey === `string` && defaultValue && !_(okey).isArray() ){
         await zorm.create(Settings).with({
             okey,
             value: `boolean` === typeof defaultValue ? String(defaultValue == true ? 1 : 0) : String(defaultValue)

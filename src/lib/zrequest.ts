@@ -1,11 +1,7 @@
-import { Request, Response, NextFunction } from "express"
-import path from "path"
-import fs from "fs"
-import { DEFAULT_LANG, SESS_KEYS, SESS_PREFIX } from "../config";
-import { fromHash, headers } from "./core";
-import { User } from "./types";
-import { UsersSess } from "@/zorm/users_sess";
-import zorm from "./zorm";
+import { NextFunction, Request, Response } from "express";
+import fs from "fs";
+import path from "path";
+import { DEFAULT_LANG } from "../config";
 
 // Load all language files once at startup
 const LANGS_DIR = path.join(__dirname, "..", "app", "langs");
@@ -13,7 +9,7 @@ const languages: Record<string, Record<string, string>> = {};
 
 // Preload languages into memory
 fs.readdirSync(LANGS_DIR).forEach((file) => {
-  if (file.endsWith(".js")) {
+  if (!file.startsWith(`_`) && file.endsWith(".js")) {
     const langCode = path.basename(file, path.extname(file));
     languages[langCode] = require(path.join(LANGS_DIR, file)).default;
   }

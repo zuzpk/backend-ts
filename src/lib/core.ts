@@ -1,15 +1,112 @@
-import Hashids from "hashids"
-import crypto from 'crypto'
-import de from "dotenv"
-import { Request } from "express"
-import { dynamicObject } from "./types";
-import nodemailer from 'nodemailer'
+import crypto from 'crypto';
+import de from "dotenv";
+import { Request } from "express";
+import Hashids from "hashids";
+import nodemailer from 'nodemailer';
 import { Logger } from "./logger";
-import { SESS_DURATION } from "@/config";
+import { dynamicObject } from "./types";
 
 de.config()
 const encryptionAlgo = 'aes-256-cbc';
 const hashids = new Hashids(process.env.ENCRYPTION_KEY, +process.env.HASHIDS_LENGTH!)
+
+
+class withGlobals {
+    
+    _: any;
+
+    constructor(value: any){
+        this._ = value
+    }
+
+    isTypeof(v: any){
+        return typeof this._ === typeof v
+    }
+
+    isFunction(){
+        return typeof this._ === "function"
+    }
+
+    isArray(){
+        return Array.isArray(this._)
+    }
+
+    isNull(){ 
+        return this._ === null
+    }
+
+    isString(){
+        return typeof this._ === "string"
+    }
+
+    isNumber(){
+        return /^[+-]?\d+(\.\d+)?$/.test(this._ as any)
+    }
+
+    isObject(){
+        return typeof this._ === "object" && !Array.isArray(this._) && this._ !== null
+    }
+
+    isEmpty(){
+        if (Array.isArray(this._)) return this._.length === 0
+        if (typeof this._ === "object" && this._ !== null) return Object.keys(this._).length === 0
+        return this._ === "" || String(this._).length === 0
+    }
+
+    isEmail(){ 
+        return typeof this._ === "string" && /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/.test(this._)
+    }
+
+    isUrl(){
+        return typeof this._ === "string" && /^(https?:\/\/)?(www\.)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(\/[^\s]*)?$/.test(this._)
+    }
+
+    toLowerCase(){
+        this._ = typeof this._ === "string" ? this._.toLowerCase() : String(this._).toLowerCase()
+        return this
+    }
+
+    equals(v : any){ return this._ === v }
+
+    ucfirst(){
+        this._ = typeof this._ === "string" ? this._.charAt(0).toUpperCase() + this._.slice(1) : this._
+        return this
+    }
+
+    formatString(v: string | number, ...vv: (string | number)[]){
+        if (typeof this._ !== "string") this._ = "";
+        const values = [v, ...vv];
+        this._ = this._.replace(/%(\d+)/g, (inp: any, index: any) => values[Number(index)]?.toString() || `%${index}`)
+        return this
+    }
+
+    camelCase(){
+        this._ = typeof this._ === "string"
+            ?   this._
+                  .split(/[^a-zA-Z0-9]+/)
+                  .map((word, index) =>
+                      index === 0 ? word : word.charAt(0).toUpperCase() + word.slice(1)
+                  )
+                  .join("")
+            : this._
+        return this
+    }
+
+    value(){ return this._ }
+
+    valueOf(){ return this._ }
+
+    toString(){ return String(this._) }
+
+    [Symbol.toPrimitive](hint: string){
+        if (hint === "number") return Number(this._);
+        if (hint === "boolean") return Boolean(this._);
+        return String(this._);
+    }
+
+}
+
+export const _ = <T>(value: T) => new withGlobals(value);
 
 export const toHash = ( str : number ) : string => hashids.encode(str)
 
@@ -68,52 +165,6 @@ export const Decode = (value: string, key?: string): string => {
     }
 }
 
-export const withGlobals = () => {
-    Object.prototype.isTypeof = function(v : any){ return typeof this === typeof v }
-    Object.prototype.isFunction = function(){ return typeof this === `function` }
-    Object.prototype.equals = function(v : any){ return this === v }
-    Object.prototype.isNull = function(){ return this === null }
-    Object.prototype.isString = function(){ return typeof this == `string` }
-    Object.prototype.isNumber = function(){ return /^[+-]?\d+(\.\d+)?$/.test(this as string) }
-    Object.prototype.isObject = function(){ return typeof this == `object` && !Array.isArray(this!) && this! !== null }
-    Object.prototype.isArray = function(){ return Array.isArray(this!) }
-    Object.prototype.isEmpty = function(){
-        if(Array.isArray(this))
-            return this.length === 0
-        else if(`object` === typeof this!)
-            return Object.keys(this!).length == 0
-        else
-            return this! == "" || (this! as string).length == 0
-    }
-    Object.prototype.toLowerCase = function(){ 
-        if ( typeof this === "string" ){
-            return (String.prototype.toLocaleLowerCase || String.prototype.toLowerCase)(this);
-        }
-        return String(this).toLocaleLowerCase()
-    }
-    String.prototype.isEmail = function(){ return /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/.test(this as string);  }
-    String.prototype.isUrl = function(){
-        return /^(https?:\/\/)?(www\.)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(\/[^\s]*)?$/.test(this as string);
-    }
-    String.prototype.camelCase = function(){
-        return this
-            .split(/[^a-zA-Z0-9]+/)    // Split by any non-alphanumeric character
-            .map((word, index) =>
-                index === 0
-                    ? word
-                    : word.charAt(0).toUpperCase() + word.slice(1)
-            )
-            .join('');
-    }
-    String.prototype.ucfirst = function(){
-        return `${this.charAt(0).toUpperCase()}${this.substring(1, this.length)}`
-    }
-    String.prototype.formatString = function(v: string|number, ...vv: (string|number)[]){
-        var values = [ v, ...vv ]
-        return this.replace(/%(\d+)/g, (_, index) => values[Number(index)].toString() || `%${index}`)
-    }
-}
-
 export const pluralize = (word: string, count : number) => `${word}${count !== 1 ? 's' : ''}`
 
 export const headers = (req: Request, keys?: string[]) : dynamicObject => {
@@ -123,10 +174,10 @@ export const headers = (req: Request, keys?: string[]) : dynamicObject => {
 
     (keys.length > 0 ? keys : Object.keys(req.headers)).map(key => {
         if ( keys.length > 0 && req.headers[key] ){
-            list[key.camelCase()] = req.headers[key]
+            list[_(key).camelCase()._] = req.headers[key]
         }
         else{
-            list[key.camelCase()] = req.headers[key]
+            list[_(key).camelCase()._] = req.headers[key]
         }
     })
 

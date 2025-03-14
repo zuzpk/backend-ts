@@ -1,10 +1,10 @@
-import { Request, Response, NextFunction } from "express"
-import { fromHash, headers, withSeperator } from "./core"
+import { removeAuthCookies, youser } from "@/app/user"
 import { APP_NAME, SESS_KEYS, SESS_PREFIX } from "@/config"
-import zorm from "./zorm"
-import { UsersSess } from "@/zorm/users_sess"
 import { Users } from "@/zorm/users"
-import { youser } from "@/app/user"
+import { UsersSess } from "@/zorm/users_sess"
+import { NextFunction, Request, Response } from "express"
+import { _, fromHash, headers, withSeperator } from "./core"
+import zorm from "./zorm"
 
 export const withZuzAuth = async (req: Request, res: Response, next: NextFunction) => {
 
@@ -40,7 +40,7 @@ export const withZuzAuth = async (req: Request, res: Response, next: NextFunctio
       if ( user.row!.status == -1 ){
         return res.send({
             error: `oauth`,
-            message: req.lang!.youAreBanned.formatString( APP_NAME )
+            message: _(req.lang!.youAreBanned).formatString( APP_NAME )
         })
       }
 
@@ -54,10 +54,11 @@ export const withZuzAuth = async (req: Request, res: Response, next: NextFunctio
 
     }
     else{
-      return res.send({ error: "oauth", message: req.lang!.unauthorized });
+
+      return removeAuthCookies(res).send({ error: "oauth", message: req.lang!.unauthorized });
     }
 
   }
-  else return res.send({ error: "oauth", message: req.lang!.accessdenied });
+  else return removeAuthCookies(res).send({ error: "oauth", message: req.lang!.accessdenied });
 
 }

@@ -6,15 +6,14 @@ import cookieParser from "cookie-parser"
 import http from "http"
 import WebSocket, { WebSocketServer } from "ws"
 import { API_KEY, APP_PORT, APP_VERSION } from "./config"
-import { Decode, withGlobals } from "@/lib/core"
 import Routes from "./routes"
 import { withAccessLogger } from "@/lib/logger"
 import path from "path"
 import { withZuzRequest } from "@/lib/zrequest"
 import { withZuzAuth } from "./lib/zauth"
+import { _ } from "./lib/core"
 
 de.config()
-withGlobals()
 
 const app = express();
 app.disable(`x-powered-by`);
@@ -38,20 +37,20 @@ const handleAPI = (requestMethod: "Post" | "Get", req: Request, resp: Response) 
         try{
 
             const apiRoutes = Routes[requestMethod]
-            const METHOD = method.camelCase().ucfirst()
-            const ACTION = action ? action.camelCase().ucfirst() : null
+            const METHOD = _(method).camelCase().ucfirst()._
+            const ACTION = action ? _(action).camelCase().ucfirst()._ : null
 
             // console.log(METHOD, ACTION)
 
             if ( METHOD in apiRoutes ){
 
-                if ( apiRoutes[METHOD].isFunction() ){
+                if ( _(apiRoutes[METHOD]).isFunction() ){
                     return apiRoutes[METHOD](req, resp)    
                 }
                 
                 else if( 
                     ACTION &&
-                    apiRoutes[METHOD].isObject() && 
+                    _(apiRoutes[METHOD]).isObject() && 
                     apiRoutes[METHOD].private &&
                     ACTION in apiRoutes[METHOD].private
                 ){
@@ -59,7 +58,7 @@ const handleAPI = (requestMethod: "Post" | "Get", req: Request, resp: Response) 
                 }
                 else if( 
                     ACTION &&
-                    apiRoutes[METHOD].isObject() && 
+                    _(apiRoutes[METHOD]).isObject() && 
                     ACTION in apiRoutes[METHOD]
                 ){
                     return apiRoutes[METHOD][ACTION](req, resp)
@@ -67,21 +66,21 @@ const handleAPI = (requestMethod: "Post" | "Get", req: Request, resp: Response) 
 
                 return resp.status(403).send({
                     error: `403`,
-                    message: `almost there :) try again with correct action.`
+                    message: req.lang!.apiWrongAction
                 })
                 
             }
 
             return resp.status(403).send({
                 error: `403`,
-                message: `almost there :) try again with correct method.`
+                message: req.lang!.apiWrongMethod
             })
 
         }catch(e){
             console.log(e)
             return resp.status(403).send({
                 error: `403`,
-                message: `you are lost buddy.`
+                message: req.lang!.youAreLost
             })
 
         }
@@ -89,7 +88,7 @@ const handleAPI = (requestMethod: "Post" | "Get", req: Request, resp: Response) 
 
     return resp.status(404).send({
         error: `404`,
-        message: `you are lost buddy.`
+        message: req.lang!.youAreLost
     })
 }
 

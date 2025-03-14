@@ -22,33 +22,6 @@ export interface MulterRequest extends Request {
     file: any
 }
 
-declare global {
-    interface Object { 
-        isTypeof( v: any ): boolean
-        equals( v: any ): boolean
-        isNull(): boolean
-        isString(): boolean
-        isFunction(): boolean
-        isNumber(): boolean
-        isObject(): boolean
-        isArray(): boolean
-        isEmpty(): boolean
-        isNotEmpty( v: any ): boolean
-        toLowerCase(): string,
-    }
-    
-    interface String {
-        isUrl( v: any ): boolean
-        isIPv4( v: any ): boolean
-        isEmail( v: any ): boolean;
-        ucfirst(): string;
-        camelCase(): string;
-        formatString(v: string|number, ...vv: (string|number)[]): string;
-    }
-}
-
-export {}
-
 export type UserCookies = {
     ID: string,
     Token: string,
