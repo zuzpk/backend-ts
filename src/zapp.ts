@@ -1,17 +1,17 @@
-import express, { Request, Response } from "express"
-import de from "dotenv"
-import cors from "cors"
+import { withAccessLogger } from "@/lib/logger"
+import { withZuzRequest } from "@/lib/zrequest"
 import bodyParser from "body-parser"
 import cookieParser from "cookie-parser"
+import cors from "cors"
+import de from "dotenv"
+import express, { Request, Response } from "express"
 import http from "http"
-import WebSocket, { WebSocketServer } from "ws"
-import { API_KEY, APP_PORT, APP_VERSION } from "./config"
-import Routes from "./routes"
-import { withAccessLogger } from "@/lib/logger"
-import path from "path"
-import { withZuzRequest } from "@/lib/zrequest"
+import { WebSocketServer } from "ws"
+import { API_KEY } from "./config"
+import { _, headers } from "./lib/core"
+import { handleSocketMessage } from "./lib/socket"
 import { withZuzAuth } from "./lib/zauth"
-import { _ } from "./lib/core"
+import Routes from "./routes"
 
 de.config()
 
@@ -94,5 +94,14 @@ const handleAPI = (requestMethod: "Post" | "Get", req: Request, resp: Response) 
 
 app.get(`*`, (req: Request, resp: Response) => handleAPI("Get", req, resp))
 app.post(`*`, (req: Request, resp: Response) => handleAPI("Post", req, resp))
+
+wss.on(`connection`, (ws, req) => {
+    const { origin, cfConnectingIp, cfIpcountry } = headers(req)
+    console.log(`[${cfIpcountry}:${cfConnectingIp}] Socket Client Connected`)
+    ws.on(`message`, ms => handleSocketMessage(ms, ws, origin))
+    ws.on(`close`, () => {
+        console.log(`[${cfIpcountry}:${cfConnectingIp}] Socket Client Disconnected`)
+    })
+})
 
 httpServer.listen(process.env.APP_PORT, () => console.log(`Watching you on port`, process.env.APP_PORT, `:)`) )
