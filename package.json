@@ -1,6 +1,6 @@
 {
   "name": "zapp-backend",
-  "version": "2.1.6",
+  "version": "0.1.7",
   "description": "Backend Manager for Zuz",
   "main": "index.js",
   "scripts": {
@@ -22,7 +22,7 @@
     "@types/md5": "^2.3.5",
     "@types/node": "^22.9.1",
     "@types/nodemailer": "^6.4.17",
-    "@zuzjs/orm": "^0.2.5",
+    "@zuzjs/orm": "^0.2.6",
     "body-parser": "^1.20.3",
     "chokidar": "^3.6.0",
     "concurrently": "^9.1.0",
