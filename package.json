@@ -1,6 +1,6 @@
 {
   "name": "zapp-backend",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Backend Manager for Zuz",
   "main": "index.js",
   "scripts": {

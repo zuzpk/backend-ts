@@ -92,63 +92,6 @@ const handleAPI = (requestMethod: "Post" | "Get", req: Request, resp: Response) 
     })
 }
 
-//TEST
-app.get(`/api/wallet/v2/search`, (req: Request, resp: Response) => {
-    resp.send({
-        "code": 0,
-        "message": "OK",
-        "data": {
-            "count": 1,
-            "token": [
-                {
-                    "type": 2,
-                    "top": 2,
-                    "isOfficial": 1,
-                    "name": "Tether USD",
-                    "shortName": "USDT",
-                    "id": "",
-                    "contractAddress": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
-                    "balance": 117,
-                    "balanceStr": "117",
-                    "totalBalance": 117,
-                    "totalBalanceStr": "117",
-                    "trxCount": 10.000000,
-                    "usdCount": 0E-15,
-                    "cnyCount": 0E-23,
-                    "price": 4.17587185,
-                    "usdPrice": "0.999979593935565",
-                    "cnyPrice": "7.29298095592377650262570",
-                    "logoUrl": "https://static.tronscan.org/production/logo/usdtlogo.png",
-                    "precision": 6,
-                    "inMainChain": false,
-                    "inSideChain": false,
-                    "maincontractAddress": "",
-                    "homePage": "https://tron.network/usdt",
-                    "isInAssets": true,
-                    "isShield": false,
-                    "tokenDesc": "USDT is the official stablecoin issued by Tether on the TRON network.",
-                    "issueTime": "2019-04-16 12:41:20",
-                    "issueAddress": "THPvaUhoh2Qn2y9THCZML3H815hhFhn5YC",
-                    "totalSupply": 66729830031,
-                    "totalSupplyStr": "66729830031.173842",
-                    "marketId": 0,
-                    "recommandSortId": 0,
-                    "tokenStatus": 0,
-                    "transferStatus": true,
-                    "national": "DM",
-                    "defiType": 0,
-                    "assetIdSet": null,
-                    "matchField": 4,
-                    "nrOfTokenHolders": 63658823,
-                    "transferCount": 0
-                }
-            ],
-            "word": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
-        }
-    })
-})
-
-
 app.get(`*`, (req: Request, resp: Response) => handleAPI("Get", req, resp))
 app.post(`*`, (req: Request, resp: Response) => handleAPI("Post", req, resp))
 
