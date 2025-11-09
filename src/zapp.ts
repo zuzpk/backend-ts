@@ -6,12 +6,15 @@ import cors from "cors"
 import de from "dotenv"
 import express, { Request, Response } from "express"
 import http from "http"
+import webpush from "web-push"
 import { WebSocketServer } from "ws"
-import { API_KEY } from "./config"
+import { Cog } from "./app"
+import { API_KEY, VAPID } from "./config"
 import { _, headers } from "./lib/core"
 import { handleSocketMessage } from "./lib/socket"
 import { withZuzAuth } from "./lib/zauth"
 import Routes from "./routes"
+import zorm from "./zorm"
 
 de.config()
 
@@ -104,4 +107,15 @@ wss.on(`connection`, (ws, req) => {
     })
 })
 
-httpServer.listen(process.env.APP_PORT, () => console.log(`Watching you on port`, process.env.APP_PORT, `:)`) )
+// 
+httpServer.listen(process.env.APP_PORT, async () => {
+    
+    zorm.connect().then(async () => {
+        const vapidKeys = webpush.generateVAPIDKeys();
+        VAPID.pk = await Cog(`vapid_pk`, vapidKeys.publicKey)
+        VAPID.sk = await Cog(`vapid_sk`, vapidKeys.privateKey)        
+    })
+    
+    console.log(`Watching you on port`, process.env.APP_PORT, `:)`) 
+
+})

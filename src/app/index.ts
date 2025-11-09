@@ -1,7 +1,6 @@
 import { _, withoutSeperator } from "@/lib/core"
-import zorm from "@/lib/zorm"
-import { Settings } from "@/zorm/settings"
-import { dynamicObject } from "@zuzjs/orm"
+import zorm, { Settings } from "@/zorm"
+import { dynamic } from "@zuzjs/core"
 import de from "dotenv"
 import multer from "multer"
 import path from "path"
@@ -21,7 +20,7 @@ const storage = multer.diskStorage({
 
 export const Cog = async (okey: string | string[], defaultValue?: boolean | string | string[] | number | {}) => {
     let query = zorm.find(Settings)
-    if ( _(Cog).isArray() ){
+    if ( _(okey).isArray() ){
         (okey as string[]).forEach((ok, i) => {
             console.log(`-`, ok)
             if ( i == 0 )
@@ -30,7 +29,7 @@ export const Cog = async (okey: string | string[], defaultValue?: boolean | stri
                 query.or({ okey: ok })
         })
     }
-    else query.where({ okey })
+    else query.where({ okey: okey as any })
 
     const _value = (val : string) => {
         return [`1`, `0`].includes(val) ? 
@@ -40,8 +39,8 @@ export const Cog = async (okey: string | string[], defaultValue?: boolean | stri
 
     const get = await query
     if ( get.hasRows ){
-        if ( get.rows && get.rows.length > 0 ){
-            const vals : dynamicObject = {}
+        if ( get.rows && get.rows.length > 1 ){
+            const vals : dynamic = {}
             get.rows.forEach((r) => {
                 vals[r.okey] = _value(r.value)
             })

@@ -1,6 +1,5 @@
-import { dynamicObject } from "@zuzjs/orm";
-import { UserCookies } from "./lib/types";
 import { CookieOptions } from "express";
+import { UserCookies } from "./lib/types";
 
 export const APP_PORT : number = 3001;
 export const API_KEY : string = `@`;
@@ -40,3 +39,5 @@ export const ALLOWED_ORIGINS : string[] = [
     `http://localhost:3000`,
     APP_URL
 ]
+
+export const VAPID = { pk: null, sk: null }

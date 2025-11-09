@@ -1,10 +1,9 @@
 import { ADMIN_EMAIL, APP_NAME, APP_URL, SESS_COOKIE_SETTING, SESS_COOKIE_SETTING_HTTP, SESS_DURATION, SESS_KEYS, SESS_PREFIX } from "@/config"
-import { _, Decode, Encode, fromHash, headers, numberInRange, sendMail, toHash, withoutSeperator, withSeperator } from "@/lib/core"
+import { _, Decode, Encode, fromHash, headers, numberInRange, sendMail, sendPush, toHash, withoutSeperator, withSeperator } from "@/lib/core"
 import { Logger } from "@/lib/logger"
 import { User, UserStatus, UserType } from "@/lib/types"
-import zorm from "@/lib/zorm"
-import { Users } from "@/zorm/users"
-import { UsersSess } from "@/zorm/users_sess"
+import zorm, { PushTokens, Users, UsersSess } from "@/zorm"
+import { MD5 } from "@zuzjs/core"
 import { dynamicObject } from "@zuzjs/orm"
 import de from "dotenv"
 import { Request, Response } from "express"
@@ -21,7 +20,7 @@ export const youser = async ( u: Users, cc?: string ) : Promise<User> => {
 
     return {
         ID: toHash(u.ID),
-        utp: u.utype as UserType,
+        utp: u.utype as unknown as UserType,
         name: uname(u),
         email: u.email.trim(),
         cc: cc || country,
@@ -82,7 +81,7 @@ export const Signin = async (req: Request, resp: Response) => {
         .then(async (result) => {
             const { ID, email, password } = result.record as Users
             const session = await zorm.create(UsersSess).with({
-                uid: String(ID),
+                uid: ID,
                 token: Encode(withSeperator(ID, email, password, Date.now())),
                 expiry: String(Date.now() + SESS_COOKIE_SETTING.maxAge!),
                 uinfo: geo
@@ -372,7 +371,7 @@ export const Verify = async (req: Request, resp: Response) => {
 
     const { token, otp } = req.body
 
-    if( !token || token.isEmpty() ){
+    if( !token || _(token).isEmpty() ){
         return resp.send({
             error: `invalidData`,
             message: req.lang!.verifyTokenRequired
@@ -486,4 +485,42 @@ export const Signout = async (req: Request, resp: Response) => {
         message: req.lang!.signoutFailed
     })
 
+}
+
+export const SaveWebPushToken = async (req: Request, resp: Response) => {
+
+    const { token } = req.body
+    const uid = req.sender ? req.sender.ID : 0
+    const hash = MD5(JSON.stringify(token))
+    const exist = await zorm.find(PushTokens)
+    .where({ hash })
+    
+    if ( !exist.hasRows ){
+
+        await zorm.create(PushTokens)
+        .with({
+            uid,
+            hash,
+            endpoint: token.endpoint,
+            p256dh: token.keys.p256dh,
+            auth: token.keys.auth,
+            stamp: String(Date.now()),
+            status: 1
+        })
+
+        // console.log(`[WebPushSaveResult]`, save)
+    }
+
+    sendPush(
+        token,
+        {
+            title: req.lang!.webPushWelcomeTitle,
+            message: req.lang!.webPushWelcomeMessage,
+        }
+    )
+
+    resp.send({
+        kind: `pushSubscribed`,
+        message: `Good Job! That was easy :)`
+    })
 }

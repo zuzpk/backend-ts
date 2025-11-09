@@ -1,8 +1,10 @@
+import { APP_URL, APP_VERSION, VAPID } from '@/config';
 import crypto from 'crypto';
 import de from "dotenv";
 import { Request } from "express";
 import Hashids from "hashids";
 import nodemailer from 'nodemailer';
+import webpush from "web-push";
 import { Logger } from "./logger";
 import { dynamicObject } from "./types";
 
@@ -226,3 +228,49 @@ export const sendMail = (from : string, to : string, subject : string, message :
 export const urldecode = (str: string) => decodeURIComponent(str.replace(/\+/g, '%20'))
 
 export const urlencode = (str: string) => encodeURIComponent(str)
+
+export const sendPush = async (
+    token: {
+        endpoint: string,
+        expirationTime: string | number | null,
+        keys: {
+            p256dh: string,
+            auth: string
+        }
+    },
+    meta: {
+        title: string,
+        message: string,
+        icon?: string,
+        badge?: string,
+        url?: string,
+        tag?: string,
+    }
+) => {
+
+    const { title, message, icon, badge, url, tag } = meta
+
+    webpush.setVapidDetails(
+        url || APP_URL,
+        VAPID.pk,
+        VAPID.sk,
+    );
+
+    webpush.sendNotification(
+        token,
+        JSON.stringify({
+            title,
+            message,
+            icon: icon || "/static/icons/welcome-192.png",
+            badge: icon || "/static/icons/badge-72.png",
+            data: { url: url || `/` },           // opens homepage when clicked
+            tag: tag || `ZAPP_${APP_VERSION}`
+        })
+    )
+    .then((resp) => {
+        // console.log(`WebPushSendSent`, resp)
+    })
+    .catch((err) => {
+        console.log(`WebPushSendFailed`, err)
+    });
+}

@@ -1,11 +1,12 @@
 import { Users } from "@/zorm/users";
-import { Request, Response } from "express"
+import { Request } from "express";
 
 declare module "express" {
     interface Request {
       lang?: Record<string, string>;
       user?: User | null,
       rawUser?: Users | null,
+      sender?: Users | null,
       sessionID?: number
     }
 }

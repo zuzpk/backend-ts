@@ -48,6 +48,7 @@ export const withZuzAuth = async (req: Request, res: Response, next: NextFunctio
       
       req.user = await youser(user.row!)
       req.rawUser = user.row!
+      req.sender = user.row!
       req.sessionID = sid
 
       next();
