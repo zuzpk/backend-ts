@@ -1,7 +1,7 @@
+import { headers } from "@/lib/core"
+import { dynamicObject } from "@/lib/types"
+import { NextFunction, Request, Response } from "express"
 import winston from "winston"
-import { Request, Response, NextFunction } from "express"
-import { headers } from "./core"
-import { dynamicObject } from "./types"
 
 export const Logger = winston.createLogger({
     level: "info",

@@ -1,4 +1,4 @@
-import { dynamicObject } from "../lib/types";
+import { dynamicObject } from "@/lib/types";
 
 export const handleSocketMessage = (ms, ws, origin) => {
     

@@ -1,5 +1,5 @@
+import { UserCookies } from "@/lib/types";
 import { CookieOptions } from "express";
-import { UserCookies } from "./lib/types";
 
 export const APP_PORT : number = 3001;
 export const API_KEY : string = `@`;

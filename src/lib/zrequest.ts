@@ -1,7 +1,7 @@
+import { DEFAULT_LANG } from "@/config";
 import { NextFunction, Request, Response } from "express";
 import fs from "fs";
 import path from "path";
-import { DEFAULT_LANG } from "../config";
 
 // Load all language files once at startup
 const LANGS_DIR = path.join(__dirname, "..", "app", "langs");

@@ -1,12 +1,12 @@
 import { APP_URL, APP_VERSION, VAPID } from '@/config';
+import { Logger } from "@/lib/logger";
+import { dynamicObject } from "@/lib/types";
 import crypto from 'crypto';
 import de from "dotenv";
 import { Request } from "express";
 import Hashids from "hashids";
 import nodemailer from 'nodemailer';
 import webpush from "web-push";
-import { Logger } from "./logger";
-import { dynamicObject } from "./types";
 
 de.config()
 const encryptionAlgo = 'aes-256-cbc';

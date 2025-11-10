@@ -1,7 +1,7 @@
+import { Recover, RecoverUpdate, SaveWebPushToken, Signin, Signout, Signup, Verify } from "@/app/user";
 import { dynamicObject } from "@/lib/types";
+import zorm, { Settings } from "@/zorm";
 import { Request, Response } from "express";
-import { Recover, RecoverUpdate, SaveWebPushToken, Signin, Signout, Signup, Verify } from "./app/user";
-import zorm, { Settings } from "./zorm";
 
 const Routes : dynamicObject = {
     Get: {

@@ -1,8 +1,8 @@
-import { spawn, ChildProcess } from 'child_process';
+import { Logger } from '@/lib/logger';
+import { ChildProcess, spawn } from 'child_process';
+import chokidar, { FSWatcher } from 'chokidar';
 import fs from 'fs';
 import path from 'path';
-import chokidar, { FSWatcher } from 'chokidar';
-import { Logger } from './lib/logger';
 
 class ProcessManager {
 
