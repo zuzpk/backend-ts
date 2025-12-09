@@ -1,114 +1,20 @@
-import { APP_URL, APP_VERSION, VAPID } from '@/config';
-import { Logger } from "@/lib/logger";
-import { dynamicObject } from "@/lib/types";
+import { RemoveWebPushToken } from "@/app/user";
+import { API_KEY, APP_URL, APP_VERSION, VAPID } from "@/config";
+import { Logger } from "@/lib";
+import Routes from "@/routes";
+import { _, dynamic } from "@zuzjs/core";
 import crypto from 'crypto';
-import de from "dotenv";
-import { Request } from "express";
+import { Request, Response } from "express";
 import Hashids from "hashids";
 import nodemailer from 'nodemailer';
 import webpush from "web-push";
-
-de.config()
 const encryptionAlgo = 'aes-256-cbc';
+
 const hashids = new Hashids(process.env.ENCRYPTION_KEY, +process.env.HASHIDS_LENGTH!)
 
+export const withSeperator = (str: string|number, ...more: (string|number)[]) : string => [str, ...more].join(process.env.SEPERATOR)
 
-class withGlobals {
-    
-    _: any;
-
-    constructor(value: any){
-        this._ = value
-    }
-
-    isTypeof(v: any){
-        return typeof this._ === typeof v
-    }
-
-    isFunction(){
-        return typeof this._ === "function"
-    }
-
-    isArray(){
-        return Array.isArray(this._)
-    }
-
-    isNull(){ 
-        return this._ === null
-    }
-
-    isString(){
-        return typeof this._ === "string"
-    }
-
-    isNumber(){
-        return /^[+-]?\d+(\.\d+)?$/.test(this._ as any)
-    }
-
-    isObject(){
-        return typeof this._ === "object" && !Array.isArray(this._) && this._ !== null
-    }
-
-    isEmpty(){
-        if (Array.isArray(this._)) return this._.length === 0
-        if (typeof this._ === "object" && this._ !== null) return Object.keys(this._).length === 0
-        return this._ === "" || String(this._).length === 0
-    }
-
-    isEmail(){ 
-        return typeof this._ === "string" && /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/.test(this._)
-    }
-
-    isUrl(){
-        return typeof this._ === "string" && /^(https?:\/\/)?(www\.)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(\/[^\s]*)?$/.test(this._)
-    }
-
-    toLowerCase(){
-        this._ = typeof this._ === "string" ? this._.toLowerCase() : String(this._).toLowerCase()
-        return this
-    }
-
-    equals(v : any){ return this._ === v }
-
-    ucfirst(){
-        this._ = typeof this._ === "string" ? this._.charAt(0).toUpperCase() + this._.slice(1) : this._
-        return this
-    }
-
-    formatString(v: string | number, ...vv: (string | number)[]){
-        if (typeof this._ !== "string") this._ = "";
-        const values = [v, ...vv];
-        this._ = this._.replace(/%(\d+)/g, (inp: any, index: any) => values[Number(index)]?.toString() || `%${index}`)
-        return this
-    }
-
-    camelCase(){
-        this._ = typeof this._ === "string"
-            ?   this._
-                  .split(/[^a-zA-Z0-9]+/)
-                  .map((word, index) =>
-                      index === 0 ? word : word.charAt(0).toUpperCase() + word.slice(1)
-                  )
-                  .join("")
-            : this._
-        return this
-    }
-
-    value(){ return this._ }
-
-    valueOf(){ return this._ }
-
-    toString(){ return String(this._) }
-
-    [Symbol.toPrimitive](hint: string){
-        if (hint === "number") return Number(this._);
-        if (hint === "boolean") return Boolean(this._);
-        return String(this._);
-    }
-
-}
-
-export const _ = <T>(value: T) => new withGlobals(value);
+export const withoutSeperator = (str: string) : string[] => str.split(process.env.SEPERATOR!)
 
 export const toHash = ( str : number ) : string => hashids.encode(str)
 
@@ -122,11 +28,7 @@ export const fromHash = ( str : string ) : number => {
     }
 }
 
-export const withSeperator = (str: string|number, ...more: (string|number)[]) : string => [str, ...more].join(process.env.SEPERATOR)
-
-export const withoutSeperator = (str: string) : string[] => str.split(process.env.SEPERATOR!)
-
-export const lang = (str: string, values: (string|number)[]) => str.replace(/%(\d+)/g, (_, index) => values[Number(index)].toString() || `%${index}`)
+const encryptKey = (key?: string): Buffer => crypto.createHash('sha256').update(key || process.env.ENCRYPTION_KEY!).digest();
 
 const safeB64Encode = (str: string): string => {
     return str.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -139,8 +41,6 @@ const safeB64Decode = (str: string): string => {
     }
     return str //Buffer.from(str, 'base64').toString('utf8');
 }
-
-const encryptKey = (key?: string): Buffer => crypto.createHash('sha256').update(key || process.env.ENCRYPTION_KEY!).digest();
 
 export const Encode = (value: string, key?: string): string => {
     if (!value) return ``;
@@ -167,11 +67,9 @@ export const Decode = (value: string, key?: string): string => {
     }
 }
 
-export const pluralize = (word: string, count : number) => `${word}${count !== 1 ? 's' : ''}`
+export const headers = (req: Request, keys?: string[]) : dynamic => {
 
-export const headers = (req: Request, keys?: string[]) : dynamicObject => {
-
-    const list = {}
+    const list : dynamic = {}
     keys = keys || [];
 
     (keys.length > 0 ? keys : Object.keys(req.headers)).map(key => {
@@ -187,11 +85,124 @@ export const headers = (req: Request, keys?: string[]) : dynamicObject => {
 
 }
 
-export const numberInRange = (min: number, max: number) => {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
+export const handleAPI = (requestMethod: "Post" | "Get", req: Request, resp: Response) => {
+
+    const [ key, method, action, ...rest ] = req.url.split(`/`).filter(Boolean)
+    
+    if ( key == API_KEY && method ){
+        try{
+            
+            const apiRoutes = Routes[requestMethod]
+            const METHOD = _(method).camelCase().ucfirst()._
+            const ACTION = action ? _(action).camelCase().ucfirst()._ : null
+            
+            if ( METHOD in apiRoutes ){
+
+                if ( _(apiRoutes[METHOD]).isFunction() ){
+                    return apiRoutes[METHOD](req, resp)    
+                }
+                
+                else if( 
+                    ACTION &&
+                    _(apiRoutes[METHOD]).isObject() && 
+                    apiRoutes[METHOD].private &&
+                    ACTION in apiRoutes[METHOD].private
+                ){
+                    return null // withZuzAuth(req, resp, () => apiRoutes[METHOD].private[ACTION](req, resp))
+                }
+                else if( 
+                    ACTION &&
+                    _(apiRoutes[METHOD]).isObject() && 
+                    ACTION in apiRoutes[METHOD]
+                ){
+                    return apiRoutes[METHOD][ACTION](req, resp)
+                }
+
+                return resp.status(403).send({
+                    error: `403`,
+                    message: req.lang!.apiWrongAction
+                })
+                
+            }
+
+            return resp.status(403).send({
+                error: `403`,
+                message: req.lang!.apiWrongMethod
+            })
+
+        }catch(e){
+            return resp.status(403).send({
+                error: `403`,
+                message: req.lang!.youAreLost
+            })
+
+        }
+    }
+
+    return resp.status(404).send({
+        error: `404`,
+        message: req.lang!.youAreLost
+    })
 }
 
-export const uuid = (len: number) => toHash(numberInRange(11111111111, 999999999999))
+export const sendPush = async (
+    token: {
+        endpoint: string,
+        expirationTime: string | number | null,
+        keys: {
+            p256dh: string,
+            auth: string
+        }
+    },
+    meta: {
+        title: string,
+        message: string,
+        icon?: string,
+        badge?: string,
+        url?: string,
+        tag?: string,
+        requireInteraction?: boolean,
+        silent?: boolean
+    }
+) => {
+
+    const { title, message, icon, badge, url, tag, silent, requireInteraction } = meta
+
+    webpush.setVapidDetails(
+        url || APP_URL,
+        VAPID.pk!,
+        VAPID.sk!,
+    );
+
+    webpush.sendNotification(
+        {
+            endpoint: token.endpoint,
+            keys: token.keys
+        },
+        JSON.stringify({
+            title,
+            body: message,
+            icon: icon || "/static/icons/welcome-192.png",
+            badge: icon || "/static/icons/badge-72.png",
+            data: { url: url || `/` },           // opens homepage when clicked
+            tag: tag || `ZAPP_${APP_VERSION}`,
+            silent: silent || false,
+            requireInteraction: requireInteraction || false,
+        }),
+        {
+            TTL: 60 * 15,
+        }
+    )
+    .then((resp: any) => {
+        // console.log(`WebPushSendSent`, resp)
+    })
+    .catch(async (err) => {
+        console.error(`[WebPushSendFailed] ${err}`)
+        if ( err.statusCode && err.statusCode == 410 ){
+            RemoveWebPushToken(err.endpoint)
+        }
+    });
+}
 
 export const sendMail = (from : string, to : string, subject : string, message : string) => {
 
@@ -223,54 +234,4 @@ export const sendMail = (from : string, to : string, subject : string, message :
 
     })
 
-}
-
-export const urldecode = (str: string) => decodeURIComponent(str.replace(/\+/g, '%20'))
-
-export const urlencode = (str: string) => encodeURIComponent(str)
-
-export const sendPush = async (
-    token: {
-        endpoint: string,
-        expirationTime: string | number | null,
-        keys: {
-            p256dh: string,
-            auth: string
-        }
-    },
-    meta: {
-        title: string,
-        message: string,
-        icon?: string,
-        badge?: string,
-        url?: string,
-        tag?: string,
-    }
-) => {
-
-    const { title, message, icon, badge, url, tag } = meta
-
-    webpush.setVapidDetails(
-        url || APP_URL,
-        VAPID.pk,
-        VAPID.sk,
-    );
-
-    webpush.sendNotification(
-        token,
-        JSON.stringify({
-            title,
-            message,
-            icon: icon || "/static/icons/welcome-192.png",
-            badge: icon || "/static/icons/badge-72.png",
-            data: { url: url || `/` },           // opens homepage when clicked
-            tag: tag || `ZAPP_${APP_VERSION}`
-        })
-    )
-    .then((resp) => {
-        // console.log(`WebPushSendSent`, resp)
-    })
-    .catch((err) => {
-        console.log(`WebPushSendFailed`, err)
-    });
 }

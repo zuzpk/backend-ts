@@ -1,22 +1,15 @@
 import { Users } from "@/zorm/users";
-import { Request } from "express";
+import "express";
 
-declare module "express" {
-    interface Request {
-      lang?: Record<string, string>;
-      user?: User | null,
-      rawUser?: Users | null,
-      sender?: Users | null,
-      sessionID?: number
+declare global {
+    namespace Express {
+        interface Request {
+        lang?: Record<string, string>;
+        user?: User | null,
+        sender?: Users | null,
+        sessionID?: number
+        }
     }
-}
-
-export type dynamicObject = { 
-    [x: string] : any 
-}
-
-export type stringObject = { 
-    [x: string] : string
 }
 
 export interface MulterRequest extends Request {
@@ -49,6 +42,6 @@ export type User = {
     utp: UserType,
     name: string,
     email: string,
-    cc: string,
+    cc: string | undefined,
     status: UserStatus
 }

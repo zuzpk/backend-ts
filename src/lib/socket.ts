@@ -1,10 +1,10 @@
-import { dynamicObject } from "@/lib/types";
+import { dynamic } from "@zuzjs/core";
 
 export const handleSocketMessage = (ms, ws, origin) => {
     
     const raw = JSON.parse(Buffer.isBuffer(ms) ? ms.toString(`utf8`) : `string` == typeof ms ? ms : ms.data)
 
-    const respond = (a: string, m: dynamicObject) => {
+    const respond = (a: string, m: dynamic) => {
         if ( ws && ws.readyState == WebSocket.OPEN ){
             ws.send(JSON.stringify({ a, m, }))
         }

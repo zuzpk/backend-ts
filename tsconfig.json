@@ -1,27 +1,53 @@
 {
     "compilerOptions": {
-        "target": "ESNext",
+
+        "target": "es2022",
         "module": "CommonJS",
-        "strict": true,
-        "esModuleInterop": true,
-        "skipLibCheck": true,
-        "experimentalDecorators": true,
-        "emitDecoratorMetadata": true,
-        "forceConsistentCasingInFileNames": true,
+        "moduleResolution": "node",
+
+        "lib": ["es2022"],
+        "types": ["node"],
+
         "rootDir": "./src",
         "outDir": "./dist",
-        "moduleResolution": "node",
-        "lib": ["esnext"],
+
+        "sourceMap": false,
+        "declaration": false,
+        "declarationMap": false,
+
+        "strict": true,
+        "noImplicitReturns": true,
+        "noFallthroughCasesInSwitch": true,
+        "forceConsistentCasingInFileNames": true,
+
+        "noUncheckedIndexedAccess": true,
+        "exactOptionalPropertyTypes": true,
+
+        "noImplicitOverride": true,
+        "noPropertyAccessFromIndexSignature": false,
+
+        "jsx": "react-jsx",
+        "verbatimModuleSyntax": false,
+        "isolatedModules": true,
+        "noUncheckedSideEffectImports": true,
+        "moduleDetection": "force",
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        
+        "experimentalDecorators": true,
+        "emitDecoratorMetadata": true,
+
         "resolveJsonModule": true,
         "removeComments": true,
-        "sourceMap": false,
         "noImplicitAny": false,
-        "types": ["node"],
-        "baseUrl": "./",
+
+        "baseUrl": ".",
         "paths": {
             "@/*": ["src/*"]
         }
     },
-    "include": ["src/**/*.ts"],
-    "exclude": ["node_modules", "src/**/_*.*"]
+    "include": [
+        "src/**/*.ts"
+    ],
+    "exclude": ["node_modules", "dist", "src/**/_*.*"]
 }

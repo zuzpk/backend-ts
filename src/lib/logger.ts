@@ -1,5 +1,5 @@
-import { headers } from "@/lib/core"
-import { dynamicObject } from "@/lib/types"
+import { headers } from "@/lib"
+import { dynamic } from "@zuzjs/core"
 import { NextFunction, Request, Response } from "express"
 import winston from "winston"
 
@@ -33,7 +33,7 @@ const accessLogger = winston.createLogger({
         winston.format.timestamp({ format: "YYYY/MM/DD HH:mm:ss" }),
         winston.format.splat(),
         winston.format.printf(({ timestamp, message }) => {
-            const { userIP, userAgent, country, method, url } = message as dynamicObject
+            const { userIP, userAgent, country, method, url } = message as dynamic
             return `${country || `Anonymous`} (${userIP || `?`}): [${timestamp}] "${method} ${url}" "${userAgent}"`
         })
     ),

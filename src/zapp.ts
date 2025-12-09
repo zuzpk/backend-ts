@@ -1,20 +1,18 @@
 import { Cog } from "@/app"
-import { API_KEY, VAPID } from "@/config"
-import { _, headers } from "@/lib/core"
-import { withAccessLogger } from "@/lib/logger"
-import { handleSocketMessage } from "@/lib/socket"
-import { withZuzAuth } from "@/lib/zauth"
+import { VAPID } from "@/config"
+import { handleAPI, Logger } from "@/lib"
 import { withZuzRequest } from "@/lib/zrequest"
-import Routes from "@/routes"
 import zorm from "@/zorm"
 import bodyParser from "body-parser"
 import cookieParser from "cookie-parser"
 import cors from "cors"
 import de from "dotenv"
 import express, { Request, Response } from "express"
-import http from "http"
+import http, { IncomingMessage } from "http"
+import type { Buffer as BufferType } from "node:buffer"
+import { Socket } from "node:net"
 import webpush from "web-push"
-import { WebSocketServer } from "ws"
+import { WebSocket, WebSocketServer } from "ws"
 
 de.config()
 
@@ -25,97 +23,40 @@ app.use(
     cookieParser(process.env.ENCRYPTION_KEY), 
     bodyParser.json(),
     bodyParser.urlencoded({ extended: true }),
-    withAccessLogger,
+    // withAccessLogger,
     withZuzRequest
 )
+ 
+app.get(`/*splat`, (req: Request, resp: Response) => handleAPI("Get", req, resp))
+app.post(`/*splat`, (req: Request, resp: Response) => handleAPI("Post", req, resp))
 
 const httpServer = http.createServer(app)
-const wss = new WebSocketServer({ server: httpServer })
+export const wss = new WebSocketServer({ noServer: true })
 
-const handleAPI = (requestMethod: "Post" | "Get", req: Request, resp: Response) => {
-
-    const [ key, method, action, ...rest ] = req.url.split(`/`).filter(Boolean)
-    
-    if ( key == API_KEY && method ){
-        try{
-
-            const apiRoutes = Routes[requestMethod]
-            const METHOD = _(method).camelCase().ucfirst()._
-            const ACTION = action ? _(action).camelCase().ucfirst()._ : null
-
-            // console.log(METHOD, ACTION)
-
-            if ( METHOD in apiRoutes ){
-
-                if ( _(apiRoutes[METHOD]).isFunction() ){
-                    return apiRoutes[METHOD](req, resp)    
-                }
-                
-                else if( 
-                    ACTION &&
-                    _(apiRoutes[METHOD]).isObject() && 
-                    apiRoutes[METHOD].private &&
-                    ACTION in apiRoutes[METHOD].private
-                ){
-                    return withZuzAuth(req, resp, () => apiRoutes[METHOD].private[ACTION](req, resp))
-                }
-                else if( 
-                    ACTION &&
-                    _(apiRoutes[METHOD]).isObject() && 
-                    ACTION in apiRoutes[METHOD]
-                ){
-                    return apiRoutes[METHOD][ACTION](req, resp)
-                }
-
-                return resp.status(403).send({
-                    error: `403`,
-                    message: req.lang!.apiWrongAction
-                })
-                
-            }
-
-            return resp.status(403).send({
-                error: `403`,
-                message: req.lang!.apiWrongMethod
-            })
-
-        }catch(e){
-            console.log(e)
-            return resp.status(403).send({
-                error: `403`,
-                message: req.lang!.youAreLost
-            })
-
-        }
+httpServer.on(`upgrade`, async (req: IncomingMessage, socket: Socket, head: BufferType) => {
+    try{
+        wss.handleUpgrade(req, socket, head, (ws: WebSocket) => {
+            wss.emit('connection', ws, req);
+        });
     }
-
-    return resp.status(404).send({
-        error: `404`,
-        message: req.lang!.youAreLost
-    })
-}
-
-app.get(`*`, (req: Request, resp: Response) => handleAPI("Get", req, resp))
-app.post(`*`, (req: Request, resp: Response) => handleAPI("Post", req, resp))
-
-wss.on(`connection`, (ws, req) => {
-    const { origin, cfConnectingIp, cfIpcountry } = headers(req)
-    console.log(`[${cfIpcountry}:${cfConnectingIp}] Socket Client Connected`)
-    ws.on(`message`, ms => handleSocketMessage(ms, ws, origin))
-    ws.on(`close`, () => {
-        console.log(`[${cfIpcountry}:${cfConnectingIp}] Socket Client Disconnected`)
-    })
+    catch(err){
+        Logger.error(`[HTTPRequestUpgradeErrored]`, err);
+        socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+    }
 })
 
-// 
 httpServer.listen(process.env.APP_PORT, async () => {
-    
+
     zorm.connect().then(async () => {
         const vapidKeys = webpush.generateVAPIDKeys();
-        VAPID.pk = await Cog(`vapid_pk`, vapidKeys.publicKey)
-        VAPID.sk = await Cog(`vapid_sk`, vapidKeys.privateKey)        
+        const _cog = await Cog([`vapid_pk`, `vapid_sk`], [vapidKeys.publicKey, vapidKeys.privateKey])
+        VAPID.pk = _cog!.vapid_pk as string;
+        VAPID.sk = _cog!.vapid_sk as string; 
+        
+        console.log(`🚀 Server is running on port ${process.env.APP_PORT}`);
     })
-    
-    console.log(`Watching you on port`, process.env.APP_PORT, `:)`) 
+    .catch((err: any) => {
+        console.error(`[ZormConnectionFailed]`, err)
+    })
 
 })

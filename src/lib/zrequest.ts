@@ -18,7 +18,7 @@ fs.readdirSync(LANGS_DIR).forEach((file) => {
 export const withZuzRequest = async (req: Request, res: Response, next: NextFunction) => {
 
   const langCode = req.signedCookies.lang || DEFAULT_LANG;
-  req.lang = languages[langCode] || languages[DEFAULT_LANG];
+  req.lang = languages[langCode] || languages[DEFAULT_LANG]!;
 
   next()
         

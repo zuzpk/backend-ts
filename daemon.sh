@@ -3,8 +3,12 @@
 # Define the port
 PORT=3001
 
-fuser -k $PORT/tcp
+/usr/sbin/fuser -k $PORT/tcp
 
-# Start the Express server
-echo "Starting Express server on port $PORT"
-pnpm start  # Or `npm run dev` if using npm
+PNPM_PATH="/usr/bin/pnpm"
+
+cd /home/binance-bapu
+
+echo "Starting server on port $PORT"
+
+exec $PNPM_PATH dev

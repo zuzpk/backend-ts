@@ -1,6 +1,6 @@
-import { _, withoutSeperator } from "@/lib/core"
+import { withoutSeperator } from "@/lib"
 import zorm, { Settings } from "@/zorm"
-import { dynamic } from "@zuzjs/core"
+import { _, dynamic } from "@zuzjs/core"
 import de from "dotenv"
 import multer from "multer"
 import path from "path"
@@ -18,7 +18,9 @@ const storage = multer.diskStorage({
     }
 })
 
-export const Cog = async (okey: string | string[], defaultValue?: boolean | string | string[] | number | {}) => {
+export async function Cog(okey: string, defaultValue?: boolean | string | number): Promise<boolean | string | number | undefined>;
+export async function Cog(okey: string[], defaultValue?: boolean | string | string[] | number | {}): Promise<Record<string, boolean | string | number> | undefined>;
+export async function Cog(okey: string | string[], defaultValue?: boolean | string | string[] | number | {}): Promise<any> {
     let query = zorm.find(Settings)
     if ( _(okey).isArray() ){
         (okey as string[]).forEach((ok, i) => {
@@ -57,4 +59,4 @@ export const Cog = async (okey: string | string[], defaultValue?: boolean | stri
     }
 }
 
-const uploader = multer({ storage })
+export const uploader = multer({ storage })

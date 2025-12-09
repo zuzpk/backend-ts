@@ -40,4 +40,4 @@ export const ALLOWED_ORIGINS : string[] = [
     APP_URL
 ]
 
-export const VAPID = { pk: null, sk: null }
+export const VAPID : { pk: null | string, sk: null | string } = { pk: null, sk: null }

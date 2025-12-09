@@ -1,12 +1,11 @@
 import { removeAuthCookies, youser } from "@/app/user"
 import { APP_NAME, SESS_KEYS, SESS_PREFIX } from "@/config"
-import { _, fromHash, headers, withSeperator } from "@/lib/core"
-import zorm from "@/zorm"
-import { Users } from "@/zorm/users"
-import { UsersSess } from "@/zorm/users_sess"
+import { fromHash, headers, withSeperator } from "@/lib/core"
+import zorm, { Users, UsersSess } from "@/zorm"
+import { _ } from "@zuzjs/core"
 import { NextFunction, Request, Response } from "express"
 
-export const withZuzAuth = async (req: Request, res: Response, next: NextFunction) => {
+export const withZuzAuth = async (req: Request, res: Response, next: NextFunction) : Promise<any> => {
 
     
   const { userAgent, cfIpcountry } = headers(req)
@@ -47,7 +46,6 @@ export const withZuzAuth = async (req: Request, res: Response, next: NextFunctio
       await zorm.update(Users).where({ ID: uid }).with({ signin: withSeperator( country, Date.now() ) })
       
       req.user = await youser(user.row!)
-      req.rawUser = user.row!
       req.sender = user.row!
       req.sessionID = sid
 

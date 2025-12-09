@@ -1,10 +1,8 @@
 import { ADMIN_EMAIL, APP_NAME, APP_URL, SESS_COOKIE_SETTING, SESS_COOKIE_SETTING_HTTP, SESS_DURATION, SESS_KEYS, SESS_PREFIX } from "@/config"
-import { _, Decode, Encode, fromHash, headers, numberInRange, sendMail, sendPush, toHash, withoutSeperator, withSeperator } from "@/lib/core"
-import { Logger } from "@/lib/logger"
+import { Decode, Encode, fromHash, headers, Logger, sendMail, sendPush, toHash, withoutSeperator, withSeperator } from "@/lib"
 import { User, UserStatus, UserType } from "@/lib/types"
 import zorm, { PushTokens, Users, UsersSess } from "@/zorm"
-import { MD5 } from "@zuzjs/core"
-import { dynamicObject } from "@zuzjs/orm"
+import { _, dynamic, MD5, numberInRange } from "@zuzjs/core"
 import de from "dotenv"
 import { Request, Response } from "express"
 import jwt from "jsonwebtoken"
@@ -12,7 +10,7 @@ import { Cog } from "."
 
 de.config()
 
-export const uname = (u: Users) : string => u.fullname == `none` ? u.fullname.split(process.env.SEPERATOR!)[0] : u.fullname || `Guest`
+export const uname = (u: Users) : string => u.fullname == `none` ? u.fullname.split(process.env.SEPERATOR!)[0]! : u.fullname || `Guest`
 
 export const youser = async ( u: Users, cc?: string ) : Promise<User> => {
     
@@ -199,7 +197,7 @@ export const Signup = async (req: Request, resp: Response) => {
         )
         .then(async r => {
 
-            let _resp : dynamicObject = {
+            let _resp : dynamic = {
                 kind: `accountCreated`,
                 token: otpToken,
                 email,
@@ -332,6 +330,13 @@ export const RecoverUpdate = async (req: Request, resp: Response) => {
     const { token, repassw } = req.body
     const [ mode, uid, ucode, utoken ] = withoutSeperator( Decode( token ) )
 
+    if ( !uid || !ucode || !utoken ){
+        return resp.send({
+            error: `recoveryFailed`,
+            message: req.lang!.securityTokenInvalid
+        })
+    }
+    
     const user = await zorm.find(Users).where({ ID: uid, token: utoken, ucode })
 
     if ( !user.hasRows ){
@@ -379,6 +384,13 @@ export const Verify = async (req: Request, resp: Response) => {
     }
     
     const [ mode, uid, ucode, expiry ] = withoutSeperator( Decode( token ) )
+
+    if ( !uid || !ucode || !mode ){
+        return resp.send({
+            error: `verificationFailed`,
+            message: req.lang!.verifyTokenInvalid
+        })
+    }
 
     if ( otp ){
 
@@ -487,40 +499,107 @@ export const Signout = async (req: Request, resp: Response) => {
 
 }
 
-export const SaveWebPushToken = async (req: Request, resp: Response) => {
 
-    const { token } = req.body
-    const uid = req.sender ? req.sender.ID : 0
-    const hash = MD5(JSON.stringify(token))
-    const exist = await zorm.find(PushTokens)
-    .where({ hash })
-    
-    if ( !exist.hasRows ){
 
-        await zorm.create(PushTokens)
-        .with({
-            uid,
-            hash,
-            endpoint: token.endpoint,
-            p256dh: token.keys.p256dh,
-            auth: token.keys.auth,
-            stamp: String(Date.now()),
-            status: 1
+export const RemoveWebPushToken = async (endpoint: string) => {
+
+    await zorm.delete(PushTokens)
+        .where({ endpoint })
+        .catch((err: any) => console.log(`[RemoveWebPushToken Failed]`, err))
+}
+
+export const SaveWebPushToken = async (req: Request, resp: Response) : Promise<any> => {
+
+    const { userAgent, cfIpcountry : country } = headers(req)
+    const { token, em } = req.body
+
+    if ( !em || _(em).isEmpty() || !_(em).isEmail() ){
+        return resp.send({
+            error: `invalidData`,
+            message: req.lang!.invalidEmail
         })
-
-        // console.log(`[WebPushSaveResult]`, save)
     }
 
-    sendPush(
-        token,
-        {
-            title: req.lang!.webPushWelcomeTitle,
-            message: req.lang!.webPushWelcomeMessage,
-        }
-    )
+    else{
 
-    resp.send({
-        kind: `pushSubscribed`,
-        message: `Good Job! That was easy :)`
-    })
+        const u = await zorm.find(Users).where({ email: em.trim() })
+        let uid = 0
+        let uname = ``
+        if ( u.hasRows ){
+            uname = u.row.fullname
+            uid = u.row.ID;
+        }
+        else{
+
+            const geo = withSeperator( country, Date.now() )
+            const ucode = numberInRange(111111, 999999)
+            const utoken = toHash(ucode);
+            const password = Encode(`p12345678`)
+
+            let reff = 0
+            if ( `__urf` in req.body ){
+                reff = fromHash(req.body.__urf) || 0
+            }
+
+            const [ name, tld ] = em.toLowerCase().trim().split(`@`)
+            uname = name
+            const user = await zorm
+                .create(Users)
+                .with({
+                    token: utoken, 
+                    ucode: String(ucode),
+                    email: em,
+                    password,
+                    fullname: withSeperator(name.trim()),
+                    reff,
+                    joined: geo,
+                    signin: geo
+                })
+
+            if ( user.created ){
+                uid = user.id!
+            }
+        }
+
+        if ( uid == 0 ){
+            return resp.send({
+                error: `emailFailed`,
+                message: `We are unable to register your email. Try again!`
+            })
+        }
+
+        const hash = MD5(JSON.stringify(token))
+        const exist = await zorm.find(PushTokens)
+        .where({ uid, hash })
+        
+        if ( !exist.hasRows ){
+
+            await zorm.create(PushTokens)
+            .with({
+                uid,
+                hash,
+                endpoint: token.endpoint,
+                p256dh: token.keys.p256dh,
+                auth: token.keys.auth,
+                stamp: String(Date.now()),
+                status: 1
+            })
+
+            // console.log(`[WebPushSaveResult]`, save)
+        }
+
+        sendPush(
+            token,
+            {
+                title: _(req.lang!.webPushWelcomeTitle).formatString(uname, APP_NAME)._,
+                message: req.lang!.webPushWelcomeMessage!,
+            }
+        )
+
+        resp.send({
+            kind: `pushSubscribed`,
+            message: `Good Job! That was easy :)`
+        })
+
+    }
 }
