@@ -1,13 +1,14 @@
-import { Users } from "@/zorm/users";
 import "express";
 
 declare global {
     namespace Express {
         interface Request {
-        lang?: Record<string, string>;
-        user?: User | null,
-        sender?: Users | null,
-        sessionID?: number
+            lang?: Record<string, string>;
+        }
+        interface SessionData {
+            user?: User | null,
+            loggedIn?: boolean;
+            sender?: string
         }
     }
 }
