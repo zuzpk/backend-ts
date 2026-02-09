@@ -1,2 +1,8 @@
 export * from "./core";
-export { Logger } from "./logger";
+export { 
+    Logger, echo, log,  withAccessLogger, logHistory,
+    type LogEntry, 
+} from "./logger";
+export { withZuzAuth } from "./zauth";
+export { withZuzRequest } from "./zrequest";
+export { handleSocketMessage } from "./socket";

@@ -7,7 +7,7 @@ PORT=3001
 
 PNPM_PATH="/usr/bin/pnpm"
 
-cd /home/binance-bapu
+cd /home
 
 echo "Starting server on port $PORT"
 

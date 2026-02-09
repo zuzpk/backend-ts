@@ -1,12 +1,12 @@
 import { UserCookies } from "@/lib/types";
 import { CookieOptions } from "express";
-
+import { name, version } from "../package.json"
 export const APP_PORT : number = 3001;
 export const API_KEY : string = `@`;
-export const APP_VERSION : string = `2.1.1`;
-export const APP_NAME : string = "ZApp";
-export const APP_URL : string  = "https://cloud.zuz.com.pk/";
-export const API_URL : string  = "https://cloud.zuz.com.pk/@/";
+export const APP_VERSION : string = version;
+export const APP_NAME : string = name;
+export const APP_URL : string  = "https://ui.zuz.com.pk/";
+export const API_URL : string  = "https://ui.zuz.com.pk/@/";
 export const ADMIN_EMAIL : string = `hello@zuz.com.pk`;
 export const SESS_KEYS : UserCookies = {
     ID: `ui`,

@@ -1,6 +1,6 @@
 import { RemoveWebPushToken } from "@/app/user";
 import { API_KEY, APP_URL, APP_VERSION, VAPID } from "@/config";
-import { Logger } from "@/lib";
+import { Logger, withZuzAuth } from "@/lib";
 import Routes from "@/routes";
 import { _, dynamic } from "@zuzjs/core";
 import crypto from 'crypto';
@@ -108,7 +108,7 @@ export const handleAPI = (requestMethod: "Post" | "Get", req: Request, resp: Res
                     apiRoutes[METHOD].private &&
                     ACTION in apiRoutes[METHOD].private
                 ){
-                    return null // withZuzAuth(req, resp, () => apiRoutes[METHOD].private[ACTION](req, resp))
+                    return withZuzAuth(req, resp, () => apiRoutes[METHOD].private[ACTION](req, resp))
                 }
                 else if( 
                     ACTION &&

@@ -5,11 +5,19 @@ declare global {
         interface Request {
             lang?: Record<string, string>;
         }
-        interface SessionData {
-            user?: User | null,
-            loggedIn?: boolean;
-            sender?: string
-        }
+    }
+}
+
+declare module "express-session" {
+    interface SessionData {
+        loggedIn?: boolean;
+        sender?: string;
+    }
+}
+
+declare module "ws" {
+    interface WebSocket {
+        session?: any;
     }
 }
 
@@ -45,4 +53,18 @@ export type User = {
     email: string,
     cc: string | undefined,
     status: UserStatus
+}
+
+export enum Events {
+    TLog = "tlog"
+}
+
+export interface ICacheSection<T> {
+  getAll: () => T[];
+  getById: (uniqueId: string) => T | null;
+  update: (item: T) => void;
+  add: (item: T) => void;
+  addAll: (item: T[]) => void;
+  remove: (uniqueId: string) => void;
+  clear: () => void;
 }

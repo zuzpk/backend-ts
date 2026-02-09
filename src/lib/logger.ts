@@ -1,29 +1,38 @@
 import { headers } from "@/lib"
-import { dynamic } from "@zuzjs/core"
+import { dynamic, _ } from "@zuzjs/core"
 import { NextFunction, Request, Response } from "express"
 import winston from "winston"
+import path from "path"
+import pc from "picocolors";
+import { pubsub } from "@/cache"
+import { Events } from "./types"
+
+// Circular buffer for in-memory logs
+export const LOG_HISTORY_LIMIT = 100;
+export interface LogEntry { 
+    appId: string, 
+    level: `info` | `warn` | `error`, 
+    message: string, 
+    timestamp: string,
+}
+export const logHistory: LogEntry[] = [];
+
+const logFormat = winston.format.combine(
+    winston.format.timestamp({ format: "YYYY/MM/DD HH:mm:ss" }),
+    winston.format.splat(),
+    winston.format.printf(({ timestamp, level, message, appId }) => {
+        const tag = appId ? `[${appId}]` : "";
+        return `${timestamp}${tag} [${level == `info` ? pc.cyan(level) : level == `warn` ? pc.yellow(level) : pc.red(level)}]: ${message}`;
+    })
+)
 
 export const Logger = winston.createLogger({
     level: "info",
-    format: winston.format.combine(
-        winston.format.timestamp({ format: "YYYY/MM/DD HH:mm:ss" }),
-        winston.format.splat(),
-        winston.format.printf(({ timestamp, level, message }) => {
-            return `${timestamp} [${level}] ${message}`
-        })
-    ),
+    format: logFormat,
     transports: [
-        new winston.transports.Console({
-            format: winston.format.combine(
-                winston.format.timestamp({ format: "YYYY/MM/DD HH:mm:ss" }),
-                winston.format.splat(),
-                winston.format.printf(({ timestamp, level, message }) => {
-                    return `${timestamp} [${level}] ${message}`
-                })
-            ),
-        }),
+        new winston.transports.Console(),
+        new winston.transports.File({ filename: "logs/zpanel.log" }),
         new winston.transports.File({ filename: "logs/error.log", level: "error" }),
-        new winston.transports.File({ filename: "logs/combined.log" }),
     ]
 })
 
@@ -55,4 +64,38 @@ export const withAccessLogger = (req: Request, res: Response, next: NextFunction
 
     next()
 
+}
+
+export const echo = (
+    appId: string, 
+    level: `info` | `warn` | `error`, 
+    message: string
+) => {
+
+    const logEntry = { 
+        appId: appId, 
+        level, 
+        message, 
+        timestamp: new Date().toISOString() 
+    };
+    
+    // Add to in-memory history
+    logHistory.push(logEntry);
+    if (logHistory.length > LOG_HISTORY_LIMIT) {
+        logHistory.shift(); // Remove oldest
+    }
+
+    pubsub.emit(Events.TLog, logEntry)
+
+    Logger.log({ 
+        level, 
+        message: logEntry.message, 
+        appId: logEntry.appId 
+    });
+};
+
+export const log = {
+    info: (appId: string, message: string, ...data: any[]) =>  echo(appId, `info`, [ message, ...data.map(d => _(d).isObject() ? JSON.stringify(d) : d ) ].join(' ')),
+    warn: (appId: string, message: string, ...data: any[]) => echo(appId, `warn`, [ message, ...data.map(d => _(d).isObject() ? JSON.stringify(d) : d ) ].join(' ')),
+    error: (appId: string, message: string, ...data: any[]) => echo(appId, `error`, [ message, ...data.map(d => _(d).isObject() ? JSON.stringify(d) : d ) ].join(' ')),
 }
