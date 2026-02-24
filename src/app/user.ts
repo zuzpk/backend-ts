@@ -1,11 +1,10 @@
-import { ADMIN_EMAIL, APP_NAME, APP_URL, SESS_COOKIE_SETTING, SESS_COOKIE_SETTING_HTTP, SESS_DURATION, SESS_KEYS, SESS_PREFIX } from "@/config"
-import { Decode, Encode, fromHash, headers, Logger, sendMail, sendPush, toHash, withoutSeperator, withSeperator } from "@/lib"
+import { ADMIN_EMAIL, APP_NAME, APP_URL, SESS_MAX_AGE, SESS_NAME } from "@/config"
+import { Decode, Encode, fromHash, headers, log, Logger, sendMail, sendPush, toHash, withoutSeperator, withSeperator } from "@/lib"
 import { User, UserStatus, UserType } from "@/lib/types"
 import zorm, { PushTokens, Users, UsersSess } from "@/zorm"
 import { _, dynamic, MD5, numberInRange } from "@zuzjs/core"
 import de from "dotenv"
 import { Request, Response } from "express"
-import jwt from "jsonwebtoken"
 import { Cog } from "."
 
 de.config()
@@ -78,36 +77,29 @@ export const Signin = async (req: Request, resp: Response) => {
         .where({ ID: u.ID })
         .then(async (result) => {
             const { ID, email, password } = result.record as Users
+            const expiry = Date.now() + SESS_MAX_AGE
             const session = await zorm.create(UsersSess).with({
                 uid: ID,
                 token: Encode(withSeperator(ID, email, password, Date.now())),
-                expiry: String(Date.now() + SESS_COOKIE_SETTING.maxAge!),
+                expiry: expiry + "",
                 uinfo: geo
             })
-            const _you = await youser(result.record as Users, country)
-            resp.cookie(SESS_KEYS.ID, toHash(result.record!.ID), SESS_COOKIE_SETTING)
-            resp.cookie(SESS_PREFIX + SESS_KEYS.ID, toHash(result.record!.ID), SESS_COOKIE_SETTING_HTTP)
-            resp.cookie(SESS_PREFIX + SESS_KEYS.Data, _you, SESS_COOKIE_SETTING_HTTP)
-            resp.cookie(SESS_PREFIX + SESS_KEYS.Fingerprint, toHash(result.record!.ID), SESS_COOKIE_SETTING_HTTP)
-            resp.cookie(SESS_PREFIX + SESS_KEYS.Session, toHash(session.id!), SESS_COOKIE_SETTING_HTTP)
-            resp.cookie(SESS_PREFIX + SESS_KEYS.Token, jwt.sign(
-                {
-                    em: result.record!.email.trim(),
-                    cc: country,
-                    ts: Date.now()
-                }, 
-                process.env.ENCRYPTION_KEY!,
-                {
-                    audience: APP_NAME.replace(/\s+/g, `-`).toLowerCase(),
-                    issuer: APP_NAME,
-                    expiresIn: Date.now() + SESS_DURATION
-                }
-            ), SESS_COOKIE_SETTING_HTTP)
+            
+            const _you = await youser(u, country)
+            let _resp : dynamic = {
+                kind: `signedIn`,
+                u: _you,
+                message: req.lang!.accountCreated
+            }
 
-            return resp.send({
-                kind: `oauth`,
-                u: _you
-            })
+            req.session.sid = toHash(session.id!)
+            req.session.loggedIn = true
+            req.session.sender = toHash(u.ID)
+            req.session.uid = +u.ID
+            req.session.em = u.email.trim()
+            req.session.expiry = expiry
+
+            return resp.send(_resp)
 
         })
         .catch((err) => {
@@ -195,7 +187,7 @@ export const Signup = async (req: Request, resp: Response) => {
             _(req.lang!.emailSignupSubject).formatString(ucode)._,
             _(req.lang!.emailSignupMessage).formatString(APP_NAME, ucode, `${APP_URL}u/verify/${verifyToken}`, em)._
         )
-        .then(async r => {
+        .then(async (r: any) => {
 
             let _resp : dynamic = {
                 kind: `accountCreated`,
@@ -205,38 +197,29 @@ export const Signup = async (req: Request, resp: Response) => {
             }
             const oauth = await Cog(`oauth_after_signup`, 1)
             if ( oauth ){
+                
                 const { ID, email, password } = user.record!
+                const expiry = Date.now() + SESS_MAX_AGE
                 const session = await zorm.create(UsersSess).with({
                     uid: ID,
                     token: Encode(withSeperator(ID, email, password, Date.now())),
-                    expiry: String(Date.now() + SESS_COOKIE_SETTING.maxAge!),
+                    expiry: String(expiry),
                     uinfo: geo
                 })
                 const _you = await youser(user!.record as Users, country)
                 _resp.u = _you
-                resp.cookie(SESS_KEYS.ID, toHash(user.record!.ID), SESS_COOKIE_SETTING)
-                resp.cookie(SESS_PREFIX + SESS_KEYS.ID, toHash(user.record!.ID), SESS_COOKIE_SETTING_HTTP)
-                resp.cookie(SESS_PREFIX + SESS_KEYS.Data, _you, SESS_COOKIE_SETTING_HTTP)
-                resp.cookie(SESS_PREFIX + SESS_KEYS.Fingerprint, toHash(user.record!.ID), SESS_COOKIE_SETTING_HTTP)
-                resp.cookie(SESS_PREFIX + SESS_KEYS.Session, toHash(session.id!), SESS_COOKIE_SETTING_HTTP)
-                resp.cookie(SESS_PREFIX + SESS_KEYS.Token, jwt.sign(
-                    {
-                        em: user.record!.email.trim(),
-                        cc: country,
-                        ts: Date.now()
-                    }, 
-                    process.env.ENCRYPTION_KEY!,
-                    {
-                        audience: APP_NAME.replace(/\s+/g, `-`).toLowerCase(),
-                        issuer: APP_NAME,
-                        expiresIn: Date.now() + SESS_DURATION
-                    }
-                ), SESS_COOKIE_SETTING_HTTP)
+                req.session.sid = toHash(session.id!)
+                req.session.loggedIn = true
+                req.session.sender = toHash(user.record!.ID)
+                req.session.em = user.record!.email.trim()
+                req.session.expiry = expiry
+
+                // console.log(`--reqsess`, req.session)
             }
             return resp.send(_resp)
         })
-        .catch(err => {
-            Logger.error(`[signupError]`, err)
+        .catch((err: dynamic) => {
+            log.error(APP_NAME, `[signupError:1]`, err)
             return resp.send({
                 error: `accountNotCreated`,
                 message: req.lang!.accountNotCreated
@@ -245,10 +228,11 @@ export const Signup = async (req: Request, resp: Response) => {
 
     }
 
-    Logger.error(`[signupErrored]`, user.error?.message)
+    log.error(APP_NAME, `[signupError:2]`, user.error?.message)
+    
     return resp.send({
         error: `accountNotCreated`,
-        message: user.error?.message || req.lang!.accountNotCreated
+        message: req.lang!.accountNotCreated
     })
 
 }
@@ -454,37 +438,28 @@ export const Verify = async (req: Request, resp: Response) => {
 
 }
 
-export const removeAuthCookies = (resp: Response) : Response => {
-
-    const _n = { ...SESS_COOKIE_SETTING }
-    const _v = { ...SESS_COOKIE_SETTING_HTTP }
-    delete _n.maxAge
-    delete _v.maxAge
-
-    resp.clearCookie(SESS_KEYS.ID, _n)
-    Object.keys(SESS_KEYS).forEach((k) => {
-        resp.clearCookie(SESS_PREFIX + SESS_KEYS[k], _v)
-    })
-
-    return resp
-}
 
 export const Signout = async (req: Request, resp: Response) => {
 
-    const session = await zorm.delete(UsersSess).where({ ID: req.sessionID! })
+    const session = await zorm.delete(UsersSess).where({ ID: fromHash(req.session.sid!) })
 
     if ( session.deleted ){
 
-        const _n = { ...SESS_COOKIE_SETTING }
-        const _v = { ...SESS_COOKIE_SETTING_HTTP }
-        delete _n.maxAge
-        delete _v.maxAge
-
-        resp.clearCookie(SESS_KEYS.ID, _n)
-        Object.keys(SESS_KEYS).forEach((k) => {
-            resp.clearCookie(SESS_PREFIX + SESS_KEYS[k], _v)
+        req.session.destroy((err: any) => {
+            if ( err ){
+                return resp.send({
+                    error: `signoutFailed`,
+                    message: req.lang!.signoutFailed
+                })
+            }
+            return resp.send({
+                error: `signoutFailed`,
+                message: req.lang!.signoutFailed
+            })
         })
 
+        resp.clearCookie(SESS_NAME)
+        
         return resp.send({
             kind: `signoutSuccess`,
             message: req.lang!.signoutSuccess

@@ -1,4 +1,5 @@
 import "express";
+import "ws";
 
 declare global {
     namespace Express {
@@ -8,16 +9,22 @@ declare global {
     }
 }
 
-declare module "express-session" {
-    interface SessionData {
-        loggedIn?: boolean;
-        sender?: string;
-    }
+export interface UserSession {
+    loggedIn?: boolean;
+    sid?: string;
+    em?: string;
+    uid?: number;
+    sender?: string;
+    expiry?: number;
 }
 
+declare module "express-session" {
+    interface SessionData extends UserSession {}
+}
 declare module "ws" {
     interface WebSocket {
         session?: any;
+        topics?: Set<string>;
     }
 }
 
@@ -32,6 +39,12 @@ export type UserCookies = {
     Fingerprint: string,
     Session: string,
 };
+
+export enum Events {
+    TLog = "tlog",
+    onPubSocket = "ON_PUB_SOCKET",
+    onUserSocket = "ON_USER_SOCKET",
+}
 
 export enum UserType {
     Guest = 0,
@@ -53,10 +66,6 @@ export type User = {
     email: string,
     cc: string | undefined,
     status: UserStatus
-}
-
-export enum Events {
-    TLog = "tlog"
 }
 
 export interface ICacheSection<T> {

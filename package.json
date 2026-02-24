@@ -1,20 +1,22 @@
 {
   "name": "zapp-backend",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Backend Manager for Zuz",
   "main": "index.js",
   "type": "commonjs",
   "author": "ZuzPK",
   "license": "ISC",
   "scripts": {
-    "build:watch": "tsc --watch --incremental & tsc-alias -w",
-    "build": "tsc && tsc-alias",
-    "dev": "concurrently \"npm run build:watch\" \"node dist/index.js\"",
-    "db": "npx zorm pull"
+    "build:watch": "tsc --watch --incremental",
+    "alias:watch": "tsc-alias -w",
+    "build": "rm -rf dist && npm run db && tsc && tsc-alias",
+    "dev": "concurrently --kill-others -n \"TSC,ALIAS,ZAPP\" -c \"blue,yellow,green\" \"npm run build:watch\" \"npm run alias:watch\" \"node dist/index.js\"",
+    "db": "npx zorm pull",
+    "start": "node dist/index.js"
   },
   "dependencies": {
-    "@zuzjs/core": "^0.3.2",
-    "@zuzjs/orm": "^0.3.7",
+    "@zuzjs/core": "^0.3.4",
+    "@zuzjs/orm": "^0.3.16",
     "body-parser": "^2.2.2",
     "connect-redis": "^9.0.0",
     "cookie": "^1.1.1",
